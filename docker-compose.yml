@@ -1,0 +1,24 @@
+services:
+  worker:
+    build: .
+    container_name: worker-notify-json
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - START_SCHEDULER=1
+    mem_limit: 256m
+    memswap_limit: 256m
+    cpus: "0.50"
+    pids_limit: 128
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s

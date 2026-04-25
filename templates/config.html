@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>推送设置 - 通知推送系统</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #f3f4f6;
+      --text-color: #1f2937;
+      --text-secondary-color: #6b7280;
+      --card-bg: #ffffff;
+      --border-color: #e5e7eb;
+      --nav-bg: #ffffff;
+      --nav-text: #4b5563;
+      --hover-text: #111827;
+      --active-link: #4f46e5;
+    }
+    .dark {
+      --bg-color: #111827;
+      --text-color: #ffffff;
+      --text-secondary-color: #9ca3af;
+      --card-bg: #1f2937;
+      --border-color: #374151;
+      --nav-bg: #1f2937;
+      --nav-text: #e5e7eb;
+      --hover-text: #ffffff;
+      --active-link: #ffffff;
+    }
+    body {
+      min-height: 100vh;
+      background-attachment: fixed;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .text-primary { color: var(--text-color); }
+    .text-secondary { color: var(--text-secondary-color); }
+    nav { background-color: var(--nav-bg); }
+    nav a, #darkModeToggle { color: var(--nav-text); }
+    nav a:hover, #darkModeToggle:hover { color: var(--hover-text); }
+    nav a.active {
+      color: var(--active-link);
+      border-bottom-color: var(--active-link);
+    }
+    .panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+    }
+    input, select, textarea {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--active-link);
+      outline: none;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      transition: all 0.25s;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+    }
+    .btn-secondary {
+      background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+      transition: all 0.25s;
+    }
+    .btn-secondary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.15);
+    }
+    .channel-card {
+      border: 1px solid var(--border-color);
+      background-color: var(--card-bg);
+      transition: all 0.2s;
+    }
+    .channel-card.enabled {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+    .modal-container {
+      backdrop-filter: blur(8px);
+      z-index: 1040;
+    }
+    .modal-content {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+    }
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: 500;
+      z-index: 1050;
+      transform: translateX(400px);
+      transition: all 0.3s ease-in-out;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background-color: #10b981; }
+    .toast.error { background-color: #ef4444; }
+    .app-shell { padding-bottom: env(safe-area-inset-bottom); }
+    button, a, input, select, textarea { touch-action: manipulation; }
+    .card { border-radius: 1rem; box-shadow: 0 10px 30px rgba(15, 23, 42, .08); }
+    .mobile-bottom-safe { height: env(safe-area-inset-bottom); }
+    @media (max-width: 640px) {
+      nav .h-16 { height: 56px; }
+      main { padding: 1rem 0.75rem !important; }
+      .panel, .channel-card { border-radius: 1rem; }
+      .modal-container { align-items: flex-end !important; }
+      .modal-content { width: 100%; margin: 0; border-radius: 1.25rem 1.25rem 0 0; max-height: 92vh; overflow-y: auto; }
+    }
+    .push-log-row { border-bottom: 1px solid var(--border-color); }
+  .push-log-name, .push-log-msg { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .realtime-dot { width: 8px; height: 8px; border-radius: 9999px; display:inline-block; background:#9ca3af; margin-right:6px; }
+  .realtime-dot.connected { background:#10b981; }
+  @media (max-width: 640px) { .push-log-grid { grid-template-columns: 1fr !important; gap:.25rem; } }
+</style>
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="min-h-screen app-shell">
+  <div id="toast-container"></div>
+
+  <nav class="shadow-md sticky top-0 z-40 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <i class="fas fa-bell text-indigo-600 text-2xl mr-2"></i>
+          <span class="font-bold text-xl text-primary">通知推送系统</span>
+        </div>
+        <div class="flex items-center space-x-2 sm:space-x-4">
+          <a href="/admin" class="px-3 py-2 rounded-md text-sm font-medium">
+            <i class="fas fa-list sm:mr-1"></i><span class="hidden sm:inline">列表</span>
+          </a>
+          <a href="/admin/config" class="active px-3 py-2 rounded-md text-sm font-medium border-b-2">
+            <i class="fas fa-cog sm:mr-1"></i><span class="hidden sm:inline">推送设置</span>
+          </a>
+          <button id="darkModeToggle" class="px-3 py-2 rounded-md text-sm font-medium">
+            <i class="fas fa-moon"></i>
+          </button>
+          <a href="/api/logout" class="px-3 py-2 rounded-md text-sm font-medium">
+            <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">退出</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="panel rounded-lg shadow-md">
+      <form id="pushSettingsForm" class="space-y-6 p-6">
+        <div class="rounded-lg p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3" style="border: 1px solid var(--border-color);">
+          <div class="text-sm text-primary">
+            当前用户名：<span id="currentUsernameLabel" class="font-semibold"></span>
+          </div>
+          <button type="button" id="editProfileBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm font-medium">
+            <i class="fas fa-user-edit mr-2"></i>账户修改
+          </button>
+        </div>
+
+        <div class="border-b pb-6" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium mb-2 text-primary">推送渠道（可多选）</h3>
+          <div class="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            <div id="card-pushplus" class="channel-card rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+              <span class="font-medium text-sm text-primary">PushPlus 推送</span>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="pushplusEnabled" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                <button type="button" data-modal-target="pushplusConfigModal" class="open-config-modal-btn text-gray-400 hover:text-gray-600 text-lg">
+                  <i class="fas fa-cog"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="card-xizhi" class="channel-card rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+              <span class="font-medium text-sm text-primary">息知推送</span>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="xizhiEnabled" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                <button type="button" data-modal-target="xizhiConfigModal" class="open-config-modal-btn text-gray-400 hover:text-gray-600 text-lg">
+                  <i class="fas fa-cog"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="card-wecom" class="channel-card rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+              <span class="font-medium text-sm text-primary">企业微信</span>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="wecomEnabled" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                <button type="button" data-modal-target="wecomConfigModal" class="open-config-modal-btn text-gray-400 hover:text-gray-600 text-lg">
+                  <i class="fas fa-cog"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="card-telegram" class="channel-card rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+              <span class="font-medium text-sm text-primary">Telegram</span>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="telegramEnabled" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                <button type="button" data-modal-target="telegramConfigModal" class="open-config-modal-btn text-gray-400 hover:text-gray-600 text-lg">
+                  <i class="fas fa-cog"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="card-webhook1" class="channel-card rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+              <span class="font-medium text-sm text-primary">Webhook1</span>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="webhook1Enabled" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                <button type="button" data-modal-target="webhook1ConfigModal" class="open-config-modal-btn text-gray-400 hover:text-gray-600 text-lg">
+                  <i class="fas fa-cog"></i>
+                </button>
+              </div>
+            </div>
+
+            <div id="card-webhook2" class="channel-card rounded-lg p-3 flex flex-col items-center justify-center space-y-2">
+              <span class="font-medium text-sm text-primary">Webhook2</span>
+              <div class="flex items-center space-x-3">
+                <input type="checkbox" id="webhook2Enabled" class="form-checkbox h-5 w-5 text-indigo-600 rounded">
+                <button type="button" data-modal-target="webhook2ConfigModal" class="open-config-modal-btn text-gray-400 hover:text-gray-600 text-lg">
+                  <i class="fas fa-cog"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button type="submit" class="btn-primary text-white px-6 py-2 rounded-md text-sm font-medium">
+            <i class="fas fa-save mr-2"></i>保存所有配置
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="panel rounded-lg shadow-md mt-6 overflow-hidden">
+      <div class="px-6 py-4 border-b flex items-center justify-between" style="border-color: var(--border-color);">
+        <h3 class="text-lg font-medium text-primary"><i class="fas fa-history mr-2"></i>最近推送日志</h3>
+        <div class="text-xs text-secondary"><span id="realtimeDot" class="realtime-dot"></span><span id="realtimeText">实时状态连接中</span></div>
+      </div>
+      <div id="recentLogs" class="divide-y" style="border-color: var(--border-color);">
+        <div class="px-6 py-6 text-center text-secondary text-sm">暂无日志</div>
+      </div>
+    </div>
+  </main>
+
+  <div id="profileModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center z-50">
+    <div class="modal-content rounded-lg shadow-xl w-full max-w-md mx-4">
+      <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+        <h3 class="text-lg font-medium text-primary">账户修改</h3>
+        <button type="button" id="closeProfileModalBtn" class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+      </div>
+      <form id="profileForm" class="p-6 space-y-4">
+        <div>
+          <label for="profileUsername" class="block text-sm font-medium text-primary">用户名</label>
+          <input type="text" id="profileUsername" class="mt-1 block w-full rounded-md py-2 px-3" required>
+        </div>
+        <div>
+          <label for="profileCurrentPassword" class="block text-sm font-medium text-primary">当前密码</label>
+          <input type="password" id="profileCurrentPassword" class="mt-1 block w-full rounded-md py-2 px-3" required>
+        </div>
+        <div>
+          <label for="profileNewPassword" class="block text-sm font-medium text-primary">新密码</label>
+          <input type="password" id="profileNewPassword" class="mt-1 block w-full rounded-md py-2 px-3" placeholder="留空表示不修改密码">
+        </div>
+        <div>
+          <label for="profileConfirmPassword" class="block text-sm font-medium text-primary">确认新密码</label>
+          <input type="password" id="profileConfirmPassword" class="mt-1 block w-full rounded-md py-2 px-3" placeholder="再次输入新密码">
+        </div>
+        <div class="flex justify-end space-x-3 pt-2">
+          <button type="button" id="cancelProfileBtn" class="btn-secondary text-white px-4 py-2 rounded-md text-sm">取消</button>
+          <button type="submit" class="btn-primary text-white px-4 py-2 rounded-md text-sm">确认</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modals-container">
+    <div id="wecomConfigModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center">
+      <div class="modal-content rounded-lg shadow-xl max-w-xl w-full mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium text-primary">企业微信机器人 Webhook</h3>
+          <button type="button" data-close-button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="wecomWebhook" class="block text-sm font-medium text-primary">Webhook</label>
+            <input type="text" id="wecomWebhook" placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <div>
+            <label for="wecomMentionMobiles" class="block text-sm font-medium text-primary">提醒手机号</label>
+            <input type="text" id="wecomMentionMobiles" placeholder="多个手机号用,隔开" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <div>
+            <label for="wecomMentionUsers" class="block text-sm font-medium text-primary">提醒用户名</label>
+            <input type="text" id="wecomMentionUsers" placeholder="多个用户名用,隔开" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <p class="text-sm text-secondary">备注：使用企业微信群机器人 Webhook，可选填写要 @ 的手机号或者用户名，多个用,隔开。</p>
+        </div>
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t rounded-b-lg" style="border-color: var(--border-color);">
+          <button type="button" data-close-button class="btn-secondary text-white px-4 py-2 rounded-md text-sm">完成</button>
+          <button type="button" id="testWecomBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm">测试</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="telegramConfigModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center">
+      <div class="modal-content rounded-lg shadow-xl max-w-xl w-full mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium text-primary">Telegram</h3>
+          <button type="button" data-close-button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="telegramApiUrl" class="block text-sm font-medium text-primary">API 地址</label>
+            <input type="text" id="telegramApiUrl" placeholder="默认 https://api.telegram.org，可选填写代理地址" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="telegramBotToken" class="block text-sm font-medium text-primary">Bot Token</label>
+              <input type="text" id="telegramBotToken" placeholder="输入 Bot Token" class="mt-1 block w-full rounded-md py-2 px-3">
+            </div>
+            <div>
+              <label for="telegramChatId" class="block text-sm font-medium text-primary">Chat ID</label>
+              <input type="text" id="telegramChatId" placeholder="-1001234567890" class="mt-1 block w-full rounded-md py-2 px-3">
+            </div>
+          </div>
+          <p class="text-sm text-secondary">备注：默认走官方 API；可填写自定义 Telegram Bot API 地址。</p>
+        </div>
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t rounded-b-lg" style="border-color: var(--border-color);">
+          <button type="button" data-close-button class="btn-secondary text-white px-4 py-2 rounded-md text-sm">完成</button>
+          <button type="button" id="testTelegramBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm">测试</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="xizhiConfigModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center">
+      <div class="modal-content rounded-lg shadow-xl max-w-xl w-full mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium text-primary">息知推送</h3>
+          <button type="button" data-close-button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="xizhiUrl" class="block text-sm font-medium text-primary">息知推送URL (接口)</label>
+            <input type="text" id="xizhiUrl" placeholder="例如: https://xizhi.qqoq.net/xxxxxxxx.send" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <p class="text-sm text-secondary">从 <a href="https://xz.qqoq.net/" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">息知官网</a> 获取完整的推送URL。</p>
+        </div>
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t rounded-b-lg" style="border-color: var(--border-color);">
+          <button type="button" data-close-button class="btn-secondary text-white px-4 py-2 rounded-md text-sm">完成</button>
+          <button type="button" id="testXizhiBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm">测试</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pushplusConfigModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center">
+      <div class="modal-content rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium text-primary">PushPlus 推送</h3>
+          <button type="button" data-close-button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div>
+            <label for="pushplusUrl" class="block text-sm font-medium text-primary">接口地址</label>
+            <input type="text" id="pushplusUrl" placeholder="https://www.pushplus.plus/send" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <div>
+            <label for="pushplusToken" class="block text-sm font-medium text-primary">Token</label>
+            <input type="text" id="pushplusToken" placeholder="填写自己的token" class="mt-1 block w-full rounded-md py-2 px-3">
+          </div>
+          <div>
+            <label for="pushplusTemplate" class="block text-sm font-medium text-primary">模板</label>
+            <select id="pushplusTemplate" class="mt-1 block w-full rounded-md py-2 px-3">
+              <option value="markdown">markdown</option>
+              <option value="html">html</option>
+              <option value="txt">txt</option>
+            </select>
+          </div>
+          <div class="text-sm text-secondary space-y-1">
+            <div>请求地址：https://www.pushplus.plus/send</div>
+            <div>请求方式：POST</div>
+          </div>
+        </div>
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t rounded-b-lg" style="border-color: var(--border-color);">
+          <button type="button" data-close-button class="btn-secondary text-white px-4 py-2 rounded-md text-sm">完成</button>
+          <button type="button" id="testPushplusBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm">测试</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="webhook1ConfigModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center">
+      <div class="modal-content rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium text-primary">Webhook1</h3>
+          <button type="button" data-close-button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="webhook1Url" class="block text-sm font-medium text-primary">地址</label>
+              <input type="text" id="webhook1Url" placeholder="https://example.com/webhook" class="mt-1 block w-full rounded-md py-2 px-3">
+            </div>
+            <div>
+              <label for="webhook1Method" class="block text-sm font-medium text-primary">请求方法（POST、GET）</label>
+              <select id="webhook1Method" class="mt-1 block w-full rounded-md py-2 px-3">
+                <option value="POST">POST</option>
+                <option value="GET">GET</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="webhook1Headers" class="block text-sm font-medium text-primary">请求头</label>
+            <textarea id="webhook1Headers" rows="3" placeholder='{"Content-Type":"application/json"}' class="mt-1 block w-full rounded-md py-2 px-3"></textarea>
+          </div>
+          <div>
+            <label for="webhook1Body" class="block text-sm font-medium text-primary">请求体</label>
+            <textarea id="webhook1Body" rows="3" placeholder='{"msg": "内容"}' class="mt-1 block w-full rounded-md py-2 px-3"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t rounded-b-lg" style="border-color: var(--border-color);">
+          <button type="button" data-close-button class="btn-secondary text-white px-4 py-2 rounded-md text-sm">完成</button>
+          <button type="button" id="testWebhook1Btn" class="btn-primary text-white px-4 py-2 rounded-md text-sm">测试</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="webhook2ConfigModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center">
+      <div class="modal-content rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div class="flex items-center justify-between px-6 py-4 border-b rounded-t-lg" style="border-color: var(--border-color);">
+          <h3 class="text-lg font-medium text-primary">Webhook2</h3>
+          <button type="button" data-close-button class="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
+        </div>
+        <div class="p-6 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="webhook2Url" class="block text-sm font-medium text-primary">地址</label>
+              <input type="text" id="webhook2Url" placeholder="https://example.com/webhook" class="mt-1 block w-full rounded-md py-2 px-3">
+            </div>
+            <div>
+              <label for="webhook2Method" class="block text-sm font-medium text-primary">请求方法（POST、GET）</label>
+              <select id="webhook2Method" class="mt-1 block w-full rounded-md py-2 px-3">
+                <option value="POST">POST</option>
+                <option value="GET">GET</option>
+              </select>
+            </div>
+          </div>
+          <div>
+            <label for="webhook2Headers" class="block text-sm font-medium text-primary">请求头</label>
+            <textarea id="webhook2Headers" rows="3" placeholder='{"Content-Type":"application/json"}' class="mt-1 block w-full rounded-md py-2 px-3"></textarea>
+          </div>
+          <div>
+            <label for="webhook2Body" class="block text-sm font-medium text-primary">请求体</label>
+            <textarea id="webhook2Body" rows="3" placeholder='{"msg": "内容"}' class="mt-1 block w-full rounded-md py-2 px-3"></textarea>
+          </div>
+        </div>
+        <div class="flex justify-end space-x-3 px-6 py-4 border-t rounded-b-lg" style="border-color: var(--border-color);">
+          <button type="button" data-close-button class="btn-secondary text-white px-4 py-2 rounded-md text-sm">完成</button>
+          <button type="button" id="testWebhook2Btn" class="btn-primary text-white px-4 py-2 rounded-md text-sm">测试</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const isAdmin = {{ 'true' if session.is_admin else 'false' }};
+    let currentUsername = {{ session.username|tojson }};
+    const csrfToken = {{ csrf_token|tojson }};
+    const rawFetch = window.fetch.bind(window);
+    window.fetch = (resource, options = {}) => {
+      const opts = { ...options };
+      const method = String(opts.method || 'GET').toUpperCase();
+      const headers = new Headers(opts.headers || {});
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        headers.set('X-CSRF-Token', csrfToken);
+      }
+      opts.headers = headers;
+      return rawFetch(resource, opts);
+    };
+
+    document.getElementById('currentUsernameLabel').textContent = currentUsername || '-';
+
+    function openProfileModal() {
+      document.getElementById('profileUsername').value = currentUsername || '';
+      document.getElementById('profileCurrentPassword').value = '';
+      document.getElementById('profileNewPassword').value = '';
+      document.getElementById('profileConfirmPassword').value = '';
+      const modal = document.getElementById('profileModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeProfileModal() {
+      const modal = document.getElementById('profileModal');
+      modal.classList.remove('flex');
+      modal.classList.add('hidden');
+    }
+
+    async function updateMyProfile(e) {
+      e.preventDefault();
+      const newUsername = (document.getElementById('profileUsername').value || '').trim();
+      const currentPassword = document.getElementById('profileCurrentPassword').value || '';
+      const newPassword = document.getElementById('profileNewPassword').value || '';
+      const confirmPassword = document.getElementById('profileConfirmPassword').value || '';
+
+      if (!newUsername) {
+        showToast('用户名不能为空', 'error');
+        return;
+      }
+
+      if (!currentPassword) {
+        showToast('请输入当前密码', 'error');
+        return;
+      }
+
+      if (newPassword || confirmPassword) {
+        if (newPassword.length < 8) {
+          showToast('新密码至少8位', 'error');
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          showToast('两次输入的新密码不一致', 'error');
+          return;
+        }
+      }
+
+      try {
+        const response = await fetch('/api/user/profile', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: newUsername,
+            current_password: currentPassword,
+            new_password: newPassword
+          })
+        });
+        const result = await response.json();
+        if (response.ok && result.success) {
+          currentUsername = result.username || newUsername;
+          document.getElementById('currentUsernameLabel').textContent = currentUsername;
+          closeProfileModal();
+          showToast('账户信息已更新');
+        } else {
+          showToast(result.message || '更新失败', 'error');
+        }
+      } catch (error) {
+        showToast('更新失败', 'error');
+      }
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      const iconEl = document.createElement('i');
+      iconEl.className = 'fas fa-' + (type === 'success' ? 'check-circle' : 'exclamation-circle') + ' mr-2';
+      toast.appendChild(iconEl);
+      toast.appendChild(document.createTextNode(String(message)));
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 100);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 3000);
+    }
+
+    function bindChannelCard(checkboxId, cardId) {
+      const checkbox = document.getElementById(checkboxId);
+      const card = document.getElementById(cardId);
+      const update = () => {
+        if (checkbox.checked) {
+          card.classList.add('enabled');
+        } else {
+          card.classList.remove('enabled');
+        }
+      };
+      checkbox.addEventListener('change', update);
+      update();
+    }
+
+    function openModal(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) modal.classList.remove('hidden');
+    }
+
+    function closeModal(modal) {
+      if (modal) modal.classList.add('hidden');
+    }
+
+    document.querySelectorAll('.open-config-modal-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        openModal(btn.getAttribute('data-modal-target'));
+      });
+    });
+
+    document.querySelectorAll('[data-close-button]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const form = document.getElementById('pushSettingsForm');
+        if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
+        closeModal(btn.closest('.modal-container'));
+      });
+    });
+
+    document.querySelectorAll('.modal-container').forEach((modal) => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          closeModal(modal);
+        }
+      });
+    });
+
+    async function loadSettings() {
+      try {
+        const response = await fetch('/api/push-settings');
+        const data = await response.json();
+
+        document.getElementById('wecomEnabled').checked = data.wecom_enabled == 1;
+        document.getElementById('wecomWebhook').value = data.wecom_webhook || '';
+        const mentions = (data.wecom_mentions || '').split(',').map((item) => item.trim()).filter(Boolean);
+        const mobileMentions = mentions.filter((item) => /^\d{11}$/.test(item));
+        const userMentions = mentions.filter((item) => !/^\d{11}$/.test(item));
+        document.getElementById('wecomMentionMobiles').value = mobileMentions.join(',');
+        document.getElementById('wecomMentionUsers').value = userMentions.join(',');
+
+        document.getElementById('telegramEnabled').checked = data.telegram_enabled == 1;
+        document.getElementById('telegramApiUrl').value = data.telegram_api_url || 'https://api.telegram.org';
+        document.getElementById('telegramBotToken').value = data.telegram_bot_token || '';
+        document.getElementById('telegramChatId').value = data.telegram_chat_id || '';
+
+        document.getElementById('xizhiEnabled').checked = data.xizhi_enabled == 1;
+        document.getElementById('xizhiUrl').value = data.xizhi_url || '';
+
+        document.getElementById('pushplusEnabled').checked = data.pushplus_enabled == 1;
+        document.getElementById('pushplusUrl').value = data.pushplus_url || 'https://www.pushplus.plus/send';
+        document.getElementById('pushplusToken').value = data.pushplus_token || '';
+        document.getElementById('pushplusTemplate').value = data.pushplus_template || 'markdown';
+
+        document.getElementById('webhook1Enabled').checked = data.custom_webhook1_enabled == 1;
+        document.getElementById('webhook1Url').value = data.custom_webhook1_url || '';
+        document.getElementById('webhook1Method').value = data.custom_webhook1_method || 'POST';
+        document.getElementById('webhook1Headers').value = data.custom_webhook1_headers || '';
+        document.getElementById('webhook1Body').value = data.custom_webhook1_body || '';
+
+        document.getElementById('webhook2Enabled').checked = data.custom_webhook2_enabled == 1;
+        document.getElementById('webhook2Url').value = data.custom_webhook2_url || '';
+        document.getElementById('webhook2Method').value = data.custom_webhook2_method || 'POST';
+        document.getElementById('webhook2Headers').value = data.custom_webhook2_headers || '';
+        document.getElementById('webhook2Body').value = data.custom_webhook2_body || '';
+
+        bindChannelCard('wecomEnabled', 'card-wecom');
+        bindChannelCard('telegramEnabled', 'card-telegram');
+        bindChannelCard('xizhiEnabled', 'card-xizhi');
+        bindChannelCard('pushplusEnabled', 'card-pushplus');
+        bindChannelCard('webhook1Enabled', 'card-webhook1');
+        bindChannelCard('webhook2Enabled', 'card-webhook2');
+      } catch (error) {
+        showToast('加载设置失败', 'error');
+      }
+    }
+
+    function collectPushSettingsForSubmit() {
+      const normalizeUrl = (value) => {
+        const v = (value || '').trim();
+        if (!v) return '';
+        return v.replace(/\/+$/, '');
+      };
+      return {
+        wecom_enabled: document.getElementById('wecomEnabled').checked ? 1 : 0,
+        wecom_webhook: normalizeUrl(document.getElementById('wecomWebhook').value),
+        wecom_mentions: [
+          ...document.getElementById('wecomMentionMobiles').value.split(',').map((item) => item.trim()).filter(Boolean),
+          ...document.getElementById('wecomMentionUsers').value.split(',').map((item) => item.trim()).filter(Boolean)
+        ].join(','),
+        telegram_enabled: document.getElementById('telegramEnabled').checked ? 1 : 0,
+        telegram_api_url: normalizeUrl(document.getElementById('telegramApiUrl').value) || 'https://api.telegram.org',
+        telegram_bot_token: document.getElementById('telegramBotToken').value.trim(),
+        telegram_chat_id: document.getElementById('telegramChatId').value.trim(),
+        xizhi_enabled: document.getElementById('xizhiEnabled').checked ? 1 : 0,
+        xizhi_url: normalizeUrl(document.getElementById('xizhiUrl').value),
+        pushplus_enabled: document.getElementById('pushplusEnabled').checked ? 1 : 0,
+        pushplus_url: normalizeUrl(document.getElementById('pushplusUrl').value) || 'https://www.pushplus.plus/send',
+        pushplus_token: document.getElementById('pushplusToken').value.trim(),
+        pushplus_template: document.getElementById('pushplusTemplate').value,
+        custom_webhook1_enabled: document.getElementById('webhook1Enabled').checked ? 1 : 0,
+        custom_webhook1_url: normalizeUrl(document.getElementById('webhook1Url').value),
+        custom_webhook1_method: document.getElementById('webhook1Method').value,
+        custom_webhook1_headers: document.getElementById('webhook1Headers').value.trim(),
+        custom_webhook1_body: document.getElementById('webhook1Body').value.trim(),
+        custom_webhook2_enabled: document.getElementById('webhook2Enabled').checked ? 1 : 0,
+        custom_webhook2_url: normalizeUrl(document.getElementById('webhook2Url').value),
+        custom_webhook2_method: document.getElementById('webhook2Method').value,
+        custom_webhook2_headers: document.getElementById('webhook2Headers').value.trim(),
+        custom_webhook2_body: document.getElementById('webhook2Body').value.trim()
+      };
+    }
+
+    async function testPush(channel) {
+      const map = {
+        wecom: 'testWecomBtn',
+        telegram: 'testTelegramBtn',
+        xizhi: 'testXizhiBtn',
+        pushplus: 'testPushplusBtn',
+        webhook1: 'testWebhook1Btn',
+        webhook2: 'testWebhook2Btn'
+      };
+      const btn = document.getElementById(map[channel]);
+      const originalContent = btn.innerHTML;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>测试中';
+      btn.disabled = true;
+
+      try {
+        const response = await fetch('/api/push-settings/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...collectPushSettingsForSubmit(), channel: channel })
+        });
+        const result = await response.json();
+        showToast(result.message || (result.success ? '测试成功' : '测试失败'), result.success ? 'success' : 'error');
+      } catch (error) {
+        showToast('测试失败', 'error');
+      } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('testWecomBtn').addEventListener('click', () => testPush('wecom'));
+    document.getElementById('testTelegramBtn').addEventListener('click', () => testPush('telegram'));
+    document.getElementById('testXizhiBtn').addEventListener('click', () => testPush('xizhi'));
+    document.getElementById('testPushplusBtn').addEventListener('click', () => testPush('pushplus'));
+    document.getElementById('testWebhook1Btn').addEventListener('click', () => testPush('webhook1'));
+    document.getElementById('testWebhook2Btn').addEventListener('click', () => testPush('webhook2'));
+
+    document.getElementById('pushSettingsForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const response = await fetch('/api/push-settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(collectPushSettingsForSubmit())
+        });
+        const result = await response.json().catch(() => ({}));
+
+        if (response.ok && result.success !== false) {
+          showToast('保存成功');
+          loadSettings();
+        } else {
+          showToast(result.message || '保存失败', 'error');
+        }
+      } catch (error) {
+        showToast('保存失败', 'error');
+      }
+    });
+
+    document.getElementById('darkModeToggle').addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    });
+    document.getElementById('editProfileBtn').addEventListener('click', openProfileModal);
+    document.getElementById('closeProfileModalBtn').addEventListener('click', closeProfileModal);
+    document.getElementById('cancelProfileBtn').addEventListener('click', closeProfileModal);
+    document.getElementById('profileForm').addEventListener('submit', updateMyProfile);
+    document.getElementById('profileModal').addEventListener('click', (e) => {
+      if (e.target.id === 'profileModal') closeProfileModal();
+    });
+
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+
+
+    function escapeHtml(text) {
+      return String(text ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    async function loadRecentLogs() {
+      try {
+        const response = await fetch('/api/logs');
+        const data = await response.json();
+        const logs = (data.logs || []).slice(0, 50);
+        const box = document.getElementById('recentLogs');
+        if (!logs.length) {
+          box.innerHTML = '<div class="px-6 py-6 text-center text-secondary text-sm">暂无日志</div>';
+          return;
+        }
+        box.innerHTML = logs.map((log) => {
+          const status = log.status === 'success' ? '成功' : log.status === 'retrying' ? '重试中' : '失败';
+          const statusClass = log.status === 'success' ? 'text-green-600' : log.status === 'retrying' ? 'text-yellow-600' : 'text-red-600';
+          return `<div class="px-6 py-3 push-log-row">
+            <div class="push-log-grid grid items-center text-sm" style="grid-template-columns: 22% 12% 18% 48%;">
+              <div class="push-log-name text-primary font-medium" title="${escapeHtml(log.notification_name || '')}">${escapeHtml(log.notification_name || '未命名')}</div>
+              <div class="${statusClass} font-medium">${status}</div>
+              <div class="text-secondary">${escapeHtml(log.pushed_at || '')}</div>
+              <div class="push-log-msg text-secondary" title="${escapeHtml(log.message || '')}">${escapeHtml(log.message || '')}</div>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (e) {
+        showToast('加载推送日志失败', 'error');
+      }
+    }
+
+    let realtimeSocket = null;
+    let realtimeReconnectTimer = null;
+    let realtimeRetry = 0;
+    let realtimeHeartbeat = null;
+
+    function connectRealtimeStatus() {
+      if (!('WebSocket' in window)) return;
+      const dot = document.getElementById('realtimeDot');
+      const text = document.getElementById('realtimeText');
+      if (realtimeSocket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(realtimeSocket.readyState)) return;
+      clearTimeout(realtimeReconnectTimer);
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      realtimeSocket = new WebSocket(`${protocol}//${location.host}/ws`);
+      realtimeSocket.onopen = () => {
+        realtimeRetry = 0;
+        if (dot) dot.classList.add('connected');
+        if (text) text.textContent = '实时状态已连接';
+        clearInterval(realtimeHeartbeat);
+        realtimeHeartbeat = setInterval(() => {
+          if (realtimeSocket && realtimeSocket.readyState === WebSocket.OPEN) realtimeSocket.send('ping');
+        }, 25000);
+      };
+      realtimeSocket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (['state_update', 'push_status'].includes(msg.type)) {
+            if (msg.type === 'push_status' && msg.payload && msg.payload.message) {
+              const ok = String(msg.payload.status || '').includes('success');
+              showToast(msg.payload.message, ok ? 'success' : 'error');
+            }
+            clearTimeout(window.__logsTimer);
+            window.__logsTimer = setTimeout(loadRecentLogs, 180);
+          }
+        } catch (e) {}
+      };
+      realtimeSocket.onclose = () => {
+        clearInterval(realtimeHeartbeat);
+        if (dot) dot.classList.remove('connected');
+        if (text) text.textContent = '实时状态重连中';
+        const delay = Math.min(30000, 1000 * Math.pow(2, realtimeRetry++));
+        realtimeReconnectTimer = setTimeout(connectRealtimeStatus, delay);
+      };
+      realtimeSocket.onerror = () => { try { realtimeSocket.close(); } catch (e) {} };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { loadRecentLogs(); connectRealtimeStatus(); }
+    });
+    window.addEventListener('online', () => { loadRecentLogs(); connectRealtimeStatus(); });
+    window.addEventListener('load', () => { loadSettings(); loadRecentLogs(); connectRealtimeStatus(); setInterval(loadRecentLogs, 60000); });
+  </script>
+</body>
+</html>

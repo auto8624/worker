@@ -1,0 +1,22 @@
+/* FINAL CSS FIX */
+.name-col{width:42%;max-width:0}
+.type-col{width:7%}
+.config-col{width:15%}
+.next-col{width:15%}
+.status-col{width:10%}
+.action-col{
+ width:10%;
+ display:flex;
+ justify-content:flex-start;
+ align-items:center;
+ gap:6px
+}
+.text-ellipsis{
+ white-space:nowrap;
+ overflow:hidden;
+ text-overflow:ellipsis
+}
+.table-fixed{
+ table-layout:fixed;
+ width:100%
+}

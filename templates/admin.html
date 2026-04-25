@@ -1,0 +1,1490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>通知推送系统</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #f3f4f6;
+      --text-color: #1f2937;
+      --text-secondary-color: #6b7280;
+      --card-bg: #ffffff;
+      --border-color: #e5e7eb;
+    }
+    .dark {
+      --bg-color: #111827;
+      --text-color: #FFFFFF;
+      --text-secondary-color: #9ca3af;
+      --card-bg: #1f2937;
+      --border-color: #374151;
+    }
+    body {
+      min-height: 100vh;
+      background-attachment: fixed;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .card { background-color: var(--card-bg); border: 1px solid var(--border-color); }
+    .text-primary { color: var(--text-color); }
+    .text-secondary { color: var(--text-secondary-color); }
+    input, select, textarea {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      border: 1px solid var(--border-color);
+    }
+    input:focus, select:focus, textarea:focus {
+      border-color: #667eea;
+      outline: none;
+    }
+    .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .btn-danger { background: linear-gradient(135deg, #f87171 0%, #dc2626 100%); }
+    .btn-success { background: linear-gradient(135deg, #34d399 0%, #059669 100%); }
+    .btn-warning { background: linear-gradient(135deg, #fbbf24 0%, #d97706 100%); }
+    .btn-info { background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); }
+    .modal-container { backdrop-filter: blur(8px); }
+    .toast {
+      position: fixed; top: 20px; right: 20px; padding: 12px 20px;
+      border-radius: 8px; color: white; font-weight: 500; z-index: 1000;
+      transform: translateX(400px); transition: all 0.3s;
+    }
+    .toast.show { transform: translateX(0); }
+    .toast.success { background-color: #10b981; }
+    .toast.error { background-color: #ef4444; }
+    .app-shell { padding-bottom: env(safe-area-inset-bottom); }
+    button, a, input, select, textarea { touch-action: manipulation; }
+    .card { border-radius: 1rem; box-shadow: 0 10px 30px rgba(15, 23, 42, .08); }
+    .mobile-bottom-safe { height: env(safe-area-inset-bottom); }
+    tbody tr:hover { background-color: rgba(102, 126, 234, 0.05); }
+    .shift-schedule-item { transition: all 0.2s; }
+    .shift-schedule-item:hover { background-color: rgba(102, 126, 234, 0.1); }
+    #currentTimeDisplay .time-segment { margin-right: 3ch; }
+    #currentTimeDisplay .time-segment:last-child { margin-right: 0; }
+    .notification-table { table-layout: fixed; width: 100%; min-width: 1040px; }
+    .notification-name-cell, .notification-content-preview, .fixed-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .action-stack { display:flex; flex-direction:row; flex-wrap:wrap; justify-content:flex-end; align-items:center; gap:.35rem; max-width:100%; margin-left:auto; }
+    .action-stack button { width:auto; min-width:2.35rem; text-align:center; }
+    .config-cell, .next-push-cell, .status-cell { overflow:hidden; }
+    .config-cell div, .next-push-cell div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    @media (max-width: 640px) {
+      body { -webkit-tap-highlight-color: transparent; }
+      main { padding: 1rem !important; }
+      nav .h-16 { height: auto; min-height: 4rem; padding: .5rem 0; }
+      .card { border-radius: 1rem; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+      .toast { left: 12px; right: 12px; top: 12px; transform: translateY(-120px); }
+      .toast.show { transform: translateY(0); }
+      .notification-table { min-width: 980px; }
+      .action-stack { align-items:center; }
+      input, select, textarea, button { font-size: 16px; }
+    }
+  </style>
+<link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="min-h-screen app-shell">
+  <div id="toast-container"></div>
+
+  <nav class="shadow-md sticky top-0 z-40 backdrop-blur" style="background-color: var(--card-bg);">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex items-center">
+          <i class="fas fa-bell text-purple-600 text-2xl mr-2"></i>
+          <span class="font-bold text-lg text-primary">通知推送系统</span>
+        </div>
+        <div class="flex items-center space-x-2 sm:space-x-4">
+          <a href="/admin" class="px-3 py-2 rounded-md text-sm font-bold text-purple-600 border-b-2 border-purple-600">
+            <i class="fas fa-list sm:mr-1"></i><span class="hidden sm:inline">列表</span>
+          </a>
+          <a href="/admin/config" class="px-3 py-2 rounded-md text-sm font-bold text-gray-600 hover:text-gray-900">
+            <i class="fas fa-cog sm:mr-1"></i><span class="hidden sm:inline">推送设置</span>
+          </a>
+          <button id="darkModeToggle" class="px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900">
+            <i class="fas fa-moon"></i>
+          </button>
+          <a href="/api/logout" class="px-3 py-2 rounded-md text-sm font-bold text-gray-600 hover:text-gray-900">
+            <i class="fas fa-sign-out-alt sm:mr-1"></i><span class="hidden sm:inline">退出</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </nav>
+  
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="flex justify-between items-center mb-6">
+      <div class="flex items-center gap-6">
+        <h2 class="text-lg font-bold text-primary">通知列表</h2>
+        <div id="currentTimeDisplay" class="text-sm text-secondary"></div>
+      </div>
+      <button id="addNotificationBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm font-medium flex items-center">
+        <i class="fas fa-plus mr-2"></i>添加通知
+      </button>
+    </div>
+    
+    <div class="mb-4 relative">
+      <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+        <i class="fas fa-search text-gray-400"></i>
+      </span>
+      <input type="text" id="searchInput" placeholder="搜索通知..."
+        class="w-full px-10 py-2 border rounded-md focus:outline-none">
+    </div>
+
+    <div class="card rounded-lg overflow-x-auto shadow-md">
+      <table class="notification-table divide-y divide-gray-200">
+        <colgroup>
+          <col style="width:33%">
+          <col style="width:7%">
+          <col style="width:15%">
+          <col style="width:15%">
+          <col style="width:15%">
+          <col style="width:15%">
+        </colgroup>
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-3 py-3 text-left text-sm font-bold text-primary uppercase">通知名称</th>
+            <th class="px-3 py-3 text-left text-sm font-bold text-primary uppercase">类型</th>
+            <th class="px-3 py-3 text-left text-sm font-bold text-primary uppercase">配置信息</th>
+            <th class="px-3 py-3 text-left text-sm font-bold text-primary uppercase">下次推送</th>
+            <th class="px-3 py-3 text-left text-sm font-bold text-primary uppercase">状态</th>
+            <th class="px-3 py-3 text-right text-sm font-bold text-primary uppercase">操作</th>
+          </tr>
+        </thead>
+        <tbody id="notificationsBody" class="divide-y divide-gray-200"></tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="text-center text-sm text-secondary mt-8 pb-4">
+    V1.0 - 通知推送系统
+  </footer>
+
+  <div id="notificationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center z-50">
+    <div class="card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
+      <div class="bg-gray-50 px-6 py-4 border-b rounded-t-lg">
+        <div class="flex items-center justify-between">
+          <h3 id="modalTitle" class="text-lg font-medium text-primary">添加新通知</h3>
+          <button id="closeModal" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+      </div>
+      
+      <form id="notificationForm" class="p-6 space-y-6">
+        <input type="hidden" id="notificationId">
+        
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label for="name" class="block text-sm font-medium mb-1">通知名称 *</label>
+            <input type="text" id="name" required class="w-full px-3 py-2 border rounded-md focus:outline-none">
+          </div>
+          <div>
+            <label for="notifyType" class="block text-sm font-medium mb-1">通知类型</label>
+            <select id="notifyType" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+              <option value="normal">普通通知</option>
+              <option value="birthday">生日通知</option>
+              <option value="shift">倒班通知</option>
+              <option value="ping">Ping 通知</option>
+              <option value="stock">库存通知</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="normalConfigSection" class="border-t pt-6 space-y-4">
+          <h4 class="font-medium text-primary">普通通知配置</h4>
+          <div>
+            <label class="block text-sm font-medium mb-2">日期选择</label>
+            <input type="hidden" id="solarDate">
+            <div class="flex items-center gap-2 mb-2">
+              <button type="button" id="solarBtn" class="px-3 py-1 text-sm rounded bg-purple-600 text-white">阳历</button>
+              <button type="button" id="lunarBtn" class="px-3 py-1 text-sm rounded bg-gray-200 text-gray-700">农历</button>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <div id="solarDateContainer" class="flex items-center gap-2">
+                <select id="solarYear" class="w-24 px-2 py-2 border rounded-md focus:outline-none"></select>
+                <select id="solarMonth" class="w-20 px-2 py-2 border rounded-md focus:outline-none"></select>
+                <select id="solarDay" class="w-20 px-2 py-2 border rounded-md focus:outline-none"></select>
+              </div>
+
+              <div id="lunarDateContainer" class="hidden flex items-center gap-2">
+                <select id="lunarYear" class="w-24 px-2 py-2 border rounded-md focus:outline-none"></select>
+                <select id="lunarMonth" class="w-20 px-2 py-2 border rounded-md focus:outline-none"></select>
+                <select id="lunarDay" class="w-20 px-2 py-2 border rounded-md focus:outline-none"></select>
+              </div>
+
+              <input type="time" id="startTime" class="w-28 px-2 py-2 border rounded-md focus:outline-none">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">预览</label>
+            <div id="datePreview" class="px-3 py-2 bg-gray-100 rounded-md text-sm font-mono"></div>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label for="repeatMode" class="block text-sm font-medium mb-1">重复模式</label>
+              <select id="repeatMode" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+                <option value="once">单次</option>
+                <option value="daily">按天重复</option>
+                <option value="weekly">按周重复</option>
+                <option value="monthly">按月重复</option>
+                <option value="yearly">按年重复</option>
+              </select>
+            </div>
+            <div id="weekDaysContainer" class="hidden">
+              <label class="block text-sm font-medium mb-2">选择周几</label>
+              <div class="flex flex-wrap gap-2">
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="0"><span>周一</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="1"><span>周二</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="2"><span>周三</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="3"><span>周四</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="4"><span>周五</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="5"><span>周六</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="week-day mr-1" value="6"><span>周日</span></label>
+              </div>
+            </div>
+            <div id="monthMonthsContainer" class="hidden md:col-span-2">
+              <label class="block text-sm font-medium mb-2">按开始时间循环推算</label>
+              <div class="mb-2 flex items-center gap-2 text-sm">
+                <span class="text-secondary">按几个月：</span>
+                <select id="monthInterval" class="px-2 py-1 border rounded-md focus:outline-none">
+                  <option value="1">1个月</option>
+                  <option value="2">2个月</option>
+                  <option value="3">3个月</option>
+                  <option value="6">半年</option>
+                </select>
+              </div>
+              <div class="hidden flex flex-wrap gap-2 text-sm" id="monthOptions">
+                <label class="inline-flex items-center"><input type="checkbox" id="allMonthsOption" class="mr-1">全部</label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="1"><span>1月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="2"><span>2月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="3"><span>3月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="4"><span>4月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="5"><span>5月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="6"><span>6月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="7"><span>7月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="8"><span>8月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="9"><span>9月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="10"><span>10月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="11"><span>11月</span></label>
+                <label class="inline-flex items-center"><input type="checkbox" class="month-option mr-1" value="12"><span>12月</span></label>
+              </div>
+              <p class="text-xs text-secondary mt-2">下次推送时间会从“开始时间”开始，按 1个月、2个月、3个月或半年自动往后推算。</p>
+            </div>
+            <div id="advanceNoticeContainer">
+              <label for="advanceDays" class="block text-sm font-medium mb-1">提前提醒</label>
+              <select id="advanceDays" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+                <option value="0">不提前</option>
+                <option value="1">提前1天</option>
+                <option value="2">提前2天</option>
+                <option value="3">提前3天</option>
+              </select>
+            </div>
+            <input type="hidden" id="isLunar" value="0">
+          </div>
+        </div>
+
+        <div id="shiftConfigSection" class="border-t pt-6 space-y-4 hidden">
+          <h4 class="font-medium text-primary">倒班通知配置</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label for="cycleDays" class="block text-sm font-medium mb-1">倒班周期（天）</label>
+              <input type="number" id="cycleDays" value="1" min="1" max="30" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+            </div>
+            <div>
+              <label for="shiftStartDate" class="block text-sm font-medium mb-1">开始日期</label>
+              <input type="date" id="shiftStartDate" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm font-medium mb-2">班次安排 <span class="text-xs text-gray-500">（根据周期天数自动生成）</span></label>
+            <div id="shiftSchedulesContainer" class="space-y-2"></div>
+          </div>
+        </div>
+
+        <div id="pingConfigSection" class="border-t pt-6 space-y-4 hidden">
+          <h4 class="font-medium text-primary">Ping 通知配置</h4>
+          <div>
+            <label for="pingTarget" class="block text-sm font-medium mb-1">目标地址 *</label>
+            <input type="text" id="pingTarget" placeholder="支持 IP、域名、IP:端口 或 http(s)://网址" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+            <p class="text-xs text-secondary mt-1">系统每10秒检测一次，状态变化时推送“已下线/已上线”。</p>
+          </div>
+        </div>
+
+        <div id="stockConfigSection" class="border-t pt-6 space-y-4 hidden">
+          <h4 class="font-medium text-primary">库存通知配置</h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="md:col-span-2">
+              <label for="stockTargetUrl" class="block text-sm font-medium mb-1">检测网址 *</label>
+              <input type="url" id="stockTargetUrl" placeholder="https://example.com/product" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+            </div>
+            <div class="md:col-span-2">
+              <label for="stockKeyword" class="block text-sm font-medium mb-1">关键字 *</label>
+              <input type="text" id="stockKeyword" placeholder="页面包含该关键字视为缺货，不包含则视为有货" class="w-full px-3 py-2 border rounded-md focus:outline-none">
+              <p class="text-xs text-secondary mt-1">系统每10秒检测一次，仅在库存变化时推送（有货/缺货）。</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label for="content" class="block text-sm font-medium mb-1">提醒内容</label>
+          <textarea id="content" rows="3" placeholder="输入提醒内容..." class="w-full px-3 py-2 border rounded-md focus:outline-none"></textarea>
+        </div>
+        
+        <div class="flex justify-end space-x-3 pt-4 border-t">
+          <button type="button" id="testNotifyBtn" class="hidden btn-info text-white px-4 py-2 rounded-md text-sm font-medium flex items-center">
+            <i class="fas fa-paper-plane mr-2"></i>测试通知
+          </button>
+          <button type="button" id="cancelBtn" class="px-4 py-2 border rounded-md text-sm font-medium hover:bg-gray-50">
+            取消
+          </button>
+          <button type="submit" class="btn-primary text-white px-4 py-2 rounded-md text-sm font-medium">
+            <i class="fas fa-save mr-2"></i>保存
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const isAdmin = {{ 'true' if session.is_admin else 'false' }};
+    const csrfToken = {{ csrf_token|tojson }};
+
+    const rawFetch = window.fetch.bind(window);
+    window.fetch = (resource, options = {}) => {
+      const opts = { ...options };
+      const method = String(opts.method || 'GET').toUpperCase();
+      const headers = new Headers(opts.headers || {});
+      if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+        headers.set('X-CSRF-Token', csrfToken);
+      }
+      opts.headers = headers;
+      return rawFetch(resource, opts);
+    };
+    
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = 'toast ' + type;
+      const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+      const iconEl = document.createElement('i');
+      iconEl.className = 'fas fa-' + icon + ' mr-2';
+      toast.appendChild(iconEl);
+      toast.appendChild(document.createTextNode(String(message)));
+      container.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 100);
+      setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000);
+    }
+
+    function escapeHtml(text) {
+      if (typeof text !== 'string') return text;
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleDateString('zh-CN');
+      } catch { return dateStr; }
+    }
+
+    function formatTime(dateStr) {
+      if (!dateStr) return '';
+      try {
+        const d = new Date(dateStr);
+        return d.toLocaleTimeString('zh-CN', {hour: '2-digit', minute: '2-digit'});
+      } catch { return ''; }
+    }
+
+    let shiftScheduleCount = 0;
+
+    function addShiftSchedule(data = {}) {
+      const container = document.getElementById('shiftSchedulesContainer');
+      const idx = shiftScheduleCount++;
+      const html = `
+        <div class="shift-schedule-item p-3 border rounded-lg space-y-2" data-idx="${idx}">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium">第 <span class="day-num">${data.day_of_cycle || idx + 1}</span> 天</span>
+            <button type="button" class="text-red-500 hover:text-red-700 remove-shift" onclick="removeShiftSchedule(${idx})">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <select class="shift-type px-2 py-1 border rounded text-sm">
+              <option value="day" ${(data.shift_type || '') === 'day' ? 'selected' : ''}>白班</option>
+              <option value="night" ${(data.shift_type || '') === 'night' ? 'selected' : ''}>夜班</option>
+              <option value="middle" ${(data.shift_type || '') === 'middle' ? 'selected' : ''}>中班</option>
+              <option value="off" ${(data.shift_type || '') === 'off' ? 'selected' : ''}>休息</option>
+            </select>
+            <input type="time" class="shift-start px-2 py-1 border rounded text-sm" value="${data.start_time || '07:55'}">
+            <input type="time" class="shift-end px-2 py-1 border rounded text-sm" value="${data.end_time || '16:00'}">
+            <div class="flex items-center space-x-1">
+              <label class="text-xs"><input type="checkbox" class="notify-start" ${data.notify_on_start !== 0 ? 'checked' : ''}>上班</label>
+              <label class="text-xs"><input type="checkbox" class="notify-end" ${data.notify_on_end !== 0 ? 'checked' : ''}>下班</label>
+            </div>
+          </div>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', html);
+    }
+
+    function removeShiftSchedule(idx) {
+      const el = document.querySelector(`.shift-schedule-item[data-idx="${idx}"]`);
+      if (el) el.remove();
+    }
+
+    function setupShiftTypeDefaults() {
+      document.querySelectorAll('.shift-type').forEach(select => {
+        select.removeEventListener('change', handleShiftTypeChange);
+        select.addEventListener('change', handleShiftTypeChange);
+      });
+    }
+
+    function generateShiftSchedules(count) {
+      const container = document.getElementById('shiftSchedulesContainer');
+      container.innerHTML = '';
+      shiftScheduleCount = 0;
+      
+      for (let i = 0; i < count; i++) {
+        addShiftSchedule({ day_of_cycle: i + 1, shift_type: 'day' });
+      }
+      setupShiftTypeDefaults();
+    }
+
+    function handleShiftTypeChange(e) {
+      const item = e.target.closest('.shift-schedule-item');
+      const type = e.target.value;
+      const startInput = item.querySelector('.shift-start');
+      const endInput = item.querySelector('.shift-end');
+      const notifyStart = item.querySelector('.notify-start');
+      const notifyEnd = item.querySelector('.notify-end');
+
+      const presets = {
+        day: { start: '07:55', end: '16:00', notifyStart: true, notifyEnd: true },
+        night: { start: '00:00', end: '07:55', notifyStart: true, notifyEnd: true },
+        middle: { start: '15:30', end: '23:45', notifyStart: true, notifyEnd: true },
+        off: { start: '00:00', end: '23:59', notifyStart: false, notifyEnd: false }
+      };
+
+      const preset = presets[type] || presets.day;
+      startInput.value = preset.start;
+      endInput.value = preset.end;
+      notifyStart.checked = preset.notifyStart;
+      notifyEnd.checked = preset.notifyEnd;
+    }
+
+    function buildNextPushBadge(nextPushValue) {
+      if (!nextPushValue) {
+        return '<div class="text-xs text-gray-400">-</div>';
+      }
+
+      const raw = String(nextPushValue).trim();
+      const match = raw.match(/(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?/);
+      const target = match
+        ? new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            Number(match[4] || '0'),
+            Number(match[5] || '0'),
+            0,
+            0
+          )
+        : new Date(Number.NaN);
+      if (Number.isNaN(target.getTime())) {
+        return `<div class="text-xs text-purple-600">${escapeHtml(raw)}</div>`;
+      }
+
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+      const dayDiff = Math.floor((targetStart.getTime() - todayStart.getTime()) / 86400000);
+
+      const dayText = dayDiff <= 0 ? '今天' : `还有${dayDiff}天`;
+      return `
+        <div class="text-xs font-semibold text-indigo-600">${dayText}</div>
+        <div class="text-xs text-purple-600 mt-1">${escapeHtml(raw)}</div>
+      `;
+    }
+
+    async function loadNotifications() {
+      try {
+        const response = await fetch('/api/notifications');
+        const data = await response.json();
+        const tbody = document.getElementById('notificationsBody');
+        
+        if (!data || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-secondary">暂无通知</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = data.map(n => {
+          const statusHtml = n.is_active 
+            ? '<span class="px-2 py-1 text-xs font-medium rounded-full text-white bg-green-500"><i class="fas fa-check-circle mr-1"></i>正常</span>'
+            : '<span class="px-2 py-1 text-xs font-medium rounded-full text-white bg-gray-500"><i class="fas fa-pause-circle mr-1"></i>已停用</span>';
+          
+          const typeTextMap = { normal: '普通', birthday: '生日', shift: '倒班', ping: 'Ping', stock: '库存' };
+          const typeIconMap = { normal: 'fa-bell', birthday: 'fa-cake-candles', shift: 'fa-clock', ping: 'fa-network-wired', stock: 'fa-box-open' };
+          const typeText = typeTextMap[n.notify_type] || '普通';
+          const typeIcon = typeIconMap[n.notify_type] || 'fa-bell';
+          
+          let configInfo = '';
+          if ((n.notify_type === 'normal' || n.notify_type === 'birthday') && n.config) {
+            const modeText = {once: '单次', daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年'};
+            configInfo = `<div class="text-xs">${modeText[n.config.repeat_mode] || ''}</div>`;
+            if (n.config.start_time) {
+              const prefix = n.config.is_lunar ? '农历 ' : '';
+              configInfo += `<div class="text-xs" title="${escapeHtml(prefix + n.config.start_time)}">${escapeHtml(prefix + n.config.start_time)}</div>`;
+            }
+          } else if (n.notify_type === 'shift' && n.config) {
+            configInfo = `<div class="text-xs">倒班</div><div class="text-xs">${escapeHtml((n.config.cycle_days || '') + '天周期')}</div>`;
+          } else if (n.notify_type === 'ping' && n.config) {
+            configInfo = `<div class="text-xs">实时检测</div><div class="text-xs" title="${escapeHtml(n.config.target || '')}">${escapeHtml(n.config.target || '')}</div>`;
+          } else if (n.notify_type === 'stock' && n.config) {
+            configInfo = `<div class="text-xs">实时检测</div><div class="text-xs" title="${escapeHtml(n.config.keyword || '')}">${escapeHtml(n.config.keyword || '')}</div>`;
+          }
+          
+          const nextPushHtml = (n.notify_type === 'ping' || n.notify_type === 'stock')
+            ? '<div class="text-xs text-gray-400"></div>'
+            : buildNextPushBadge(n.next_push);
+          
+          const safeName = escapeHtml(n.name);
+          const previewSource = n.content_with_age || n.content || '';
+          const contentPreview = previewSource ? escapeHtml(previewSource.substring(0, 30)) + (previewSource.length > 30 ? '...' : '') : '';
+          
+          return `
+            <tr>
+              <td class="px-3 py-4">
+                <div class="font-medium text-primary notification-name-cell" title="${safeName}">${safeName}</div>
+                ${contentPreview ? '<div class="text-xs text-secondary mt-1 notification-content-preview" title="' + escapeHtml(previewSource) + '">' + contentPreview + '</div>' : ''}
+              </td>
+              <td class="px-3 py-4"><span class="text-sm fixed-ellipsis" title="${typeText}"><i class="fas ${typeIcon} mr-1"></i>${typeText}</span></td>
+              <td class="px-3 py-4 config-cell">${configInfo}</td>
+              <td class="px-3 py-4 next-push-cell">${nextPushHtml}</td>
+              <td class="px-3 py-4 status-cell">${statusHtml}</td>
+              <td class="px-3 py-4 text-right">
+                <div class="action-stack">
+                  <button class="edit-btn bg-transparent hover:bg-purple-50 text-purple-600 px-2 py-1 rounded-md text-xs font-medium" data-id="${n.id}">编辑</button>
+                  <button class="toggle-btn bg-transparent hover:bg-yellow-50 text-yellow-600 px-2 py-1 rounded-md text-xs font-medium" data-id="${n.id}" data-active="${n.is_active}">${n.is_active ? '停用' : '启用'}</button>
+                  <button class="delete-btn bg-transparent hover:bg-red-50 text-red-600 px-2 py-1 rounded-md text-xs font-medium" data-id="${n.id}">删除</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+        document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', editNotification));
+        document.querySelectorAll('.toggle-btn').forEach(btn => btn.addEventListener('click', toggleNotification));
+        document.querySelectorAll('.delete-btn').forEach(btn => btn.addEventListener('click', deleteNotification));
+      } catch (error) {
+        showToast('加载通知失败', 'error');
+      }
+    }
+
+    function ensureArray(value) {
+      if (Array.isArray(value)) return value;
+      if (typeof value === 'string') {
+        try {
+          const parsed = JSON.parse(value || '[]');
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          return [];
+        }
+      }
+      return [];
+    }
+
+
+    function normalizeWeekDaysForEdit(value) {
+      let list = [];
+      if (Array.isArray(value)) {
+        list = value;
+      } else if (value && typeof value === 'object') {
+        list = Object.keys(value).filter((key) => Boolean(value[key]));
+      } else if (typeof value === 'string') {
+        const raw = value.trim();
+        if (!raw) return [];
+        try {
+          const parsed = JSON.parse(raw);
+          return normalizeWeekDaysForEdit(parsed);
+        } catch (_) {
+          list = raw.split(/[，,\s]+/).filter(Boolean);
+        }
+      } else if (value !== undefined && value !== null) {
+        list = [value];
+      }
+
+      const nameMap = {
+        '周一': 0, '星期一': 0, '一': 0, 'mon': 0, 'monday': 0,
+        '周二': 1, '星期二': 1, '二': 1, 'tue': 1, 'tuesday': 1,
+        '周三': 2, '星期三': 2, '三': 2, 'wed': 2, 'wednesday': 2,
+        '周四': 3, '星期四': 3, '四': 3, 'thu': 3, 'thursday': 3,
+        '周五': 4, '星期五': 4, '五': 4, 'fri': 4, 'friday': 4,
+        '周六': 5, '星期六': 5, '六': 5, 'sat': 5, 'saturday': 5,
+        '周日': 6, '星期日': 6, '星期天': 6, '日': 6, '天': 6, 'sun': 6, 'sunday': 6
+      };
+      const result = [];
+      list.forEach((item) => {
+        let day;
+        if (typeof item === 'string') {
+          const key = item.trim().toLowerCase();
+          day = Object.prototype.hasOwnProperty.call(nameMap, key) ? nameMap[key] : parseInt(key, 10);
+        } else {
+          day = parseInt(item, 10);
+        }
+        if (day === 7) day = 6;
+        if (!Number.isNaN(day) && day >= 0 && day <= 6 && !result.includes(day)) result.push(day);
+      });
+      return result.sort((a, b) => a - b);
+    }
+
+    function safeSetValue(id, value) {
+      const el = document.getElementById(id);
+      if (el) el.value = value ?? '';
+    }
+
+    function normalizeNotificationForEdit(raw) {
+      const n = raw || {};
+      const type = ['normal', 'birthday', 'shift', 'ping', 'stock'].includes(n.notify_type) ? n.notify_type : 'normal';
+      const config = (n.config && typeof n.config === 'object') ? { ...n.config } : {};
+      if (type === 'normal' || type === 'birthday') {
+        config.repeat_mode = type === 'birthday' ? 'yearly' : (config.repeat_mode || 'once');
+        if (!['once', 'daily', 'weekly', 'monthly', 'yearly'].includes(config.repeat_mode)) config.repeat_mode = 'once';
+        config.start_time = config.start_time || '';
+        config.week_days = normalizeWeekDaysForEdit(config.week_days);
+        config.month_interval = ['1', '2', '3', '6'].includes(String(config.month_interval || '1')) ? parseInt(config.month_interval || '1', 10) : 1;
+        config.advance_days = parseInt(config.advance_days || 0, 10) || 0;
+        config.is_lunar = (config.is_lunar == 1) ? 1 : 0;
+      } else if (type === 'shift') {
+        config.cycle_days = parseInt(config.cycle_days || 1, 10) || 1;
+        config.start_date = config.start_date || '';
+        config.schedules = ensureArray(config.schedules);
+      } else if (type === 'ping') {
+        config.target = config.target || '';
+      } else if (type === 'stock') {
+        config.target_url = config.target_url || '';
+        config.keyword = config.keyword || '';
+      }
+      return {
+        id: n.id || '',
+        name: n.name || '',
+        notify_type: type,
+        content: n.content || '',
+        is_active: n.is_active == 0 ? 0 : 1,
+        config
+      };
+    }
+
+    async function editNotification(e) {
+      const id = e.currentTarget?.dataset?.id || e.target?.dataset?.id;
+      if (!id) {
+        showToast('通知ID不存在，无法编辑', 'error');
+        return;
+      }
+      try {
+        const response = await fetch(`/api/notifications/${id}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || data.success === false) {
+          throw new Error(data.message || '获取通知信息失败');
+        }
+        const notification = normalizeNotificationForEdit(data.notification || data);
+
+        document.getElementById('modalTitle').textContent = '编辑通知';
+        document.getElementById('notificationId').value = notification.id;
+        document.getElementById('name').value = notification.name;
+        document.getElementById('notifyType').value = notification.notify_type;
+        configureNotifyTypeSelectForEdit(notification.notify_type);
+        document.getElementById('content').value = notification.content;
+        document.getElementById('testNotifyBtn').classList.remove('hidden');
+
+        toggleConfigSections(notification.notify_type);
+        applyNotifyTypeConstraints(notification.notify_type);
+
+        if (notification.notify_type === 'normal' || notification.notify_type === 'birthday') {
+          const config = notification.config || {};
+          document.getElementById('repeatMode').value = config.repeat_mode || (notification.notify_type === 'birthday' ? 'yearly' : 'once');
+          handleRepeatModeChange();
+          const startTimeStr = config.start_time || '';
+          const isLunar = config.is_lunar == 1;
+          document.getElementById('isLunar').value = isLunar ? '1' : '0';
+          initSolarSelectors();
+          initLunarSelectors();
+
+          const parts = String(startTimeStr || '').split(' ');
+          const datePart = parts[0] || '';
+          const timePart = (parts[1] || '').slice(0, 5);
+          if (isLunar) {
+            document.getElementById('lunarBtn').click();
+            const dateParts = datePart.split('-');
+            if (dateParts.length === 3) {
+              document.getElementById('lunarYear').value = dateParts[0] || document.getElementById('lunarYear').value;
+              document.getElementById('lunarMonth').value = parseInt(dateParts[1] || '1', 10);
+              document.getElementById('lunarDay').value = parseInt(dateParts[2] || '1', 10);
+            }
+          } else {
+            document.getElementById('solarBtn').click();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+              setSolarDateFromString(datePart);
+            }
+          }
+          document.getElementById('startTime').value = timePart;
+          updateDatePreview();
+
+          const weekDays = normalizeWeekDaysForEdit(config.week_days);
+          document.querySelectorAll('.week-day').forEach(cb => {
+            cb.checked = config.repeat_mode === 'weekly' && weekDays.includes(parseInt(cb.value, 10));
+          });
+
+          if (config.repeat_mode === 'monthly') {
+            const monthInterval = String(config.month_interval || '1');
+            document.getElementById('monthInterval').value = ['1', '2', '3', '6'].includes(monthInterval) ? monthInterval : '1';
+            applyMonthInterval(document.getElementById('monthInterval').value);
+          } else {
+            setSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1));
+          }
+          handleRepeatModeChange();
+          document.getElementById('advanceDays').value = config.advance_days || 0;
+        } else if (notification.notify_type === 'shift') {
+          const config = notification.config || {};
+          document.getElementById('cycleDays').value = config.cycle_days || 1;
+          document.getElementById('shiftStartDate').value = config.start_date || '';
+          document.getElementById('shiftSchedulesContainer').innerHTML = '';
+          shiftScheduleCount = 0;
+          const schedules = ensureArray(config.schedules);
+          if (schedules.length > 0) {
+            schedules.forEach(s => addShiftSchedule(s));
+          } else {
+            generateShiftSchedules(parseInt(config.cycle_days || 1, 10) || 1);
+          }
+          setupShiftTypeDefaults();
+        } else if (notification.notify_type === 'ping') {
+          document.getElementById('pingTarget').value = notification.config.target || '';
+        } else if (notification.notify_type === 'stock') {
+          document.getElementById('stockTargetUrl').value = notification.config.target_url || '';
+          document.getElementById('stockKeyword').value = notification.config.keyword || '';
+        }
+
+        document.getElementById('notificationModal').classList.remove('hidden');
+      } catch (error) {
+        console.error('editNotification failed', error);
+        showToast(error.message || '获取通知信息失败，请检查该通知的按周配置', 'error');
+      }
+    }
+
+    async function toggleNotification(e) {
+      const id = e.target.dataset.id;
+      const isActive = e.target.dataset.active === '1';
+      
+      try {
+        await fetch(`/api/notifications/${id}/toggle-status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ is_active: !isActive })
+        });
+        showToast((isActive ? '停用' : '启用') + '成功');
+        loadNotifications();
+      } catch (error) {
+        showToast('操作失败', 'error');
+      }
+    }
+
+    async function deleteNotification(e) {
+      const id = e.target.dataset.id;
+      if (!confirm('确定要删除这条通知吗？')) return;
+      
+      try {
+        await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+        showToast('删除成功');
+        loadNotifications();
+      } catch (error) {
+        showToast('删除失败', 'error');
+      }
+    }
+
+    function toggleConfigSections(type) {
+      const isNormalLike = type === 'normal' || type === 'birthday';
+      document.getElementById('normalConfigSection').classList.toggle('hidden', !isNormalLike);
+      document.getElementById('shiftConfigSection').classList.toggle('hidden', type !== 'shift');
+      document.getElementById('pingConfigSection').classList.toggle('hidden', type !== 'ping');
+      document.getElementById('stockConfigSection').classList.toggle('hidden', type !== 'stock');
+    }
+
+    function applyNotifyTypeConstraints(type) {
+      const repeatModeEl = document.getElementById('repeatMode');
+      if (type === 'birthday') {
+        repeatModeEl.value = 'yearly';
+        repeatModeEl.disabled = true;
+      } else {
+        repeatModeEl.disabled = false;
+      }
+      handleRepeatModeChange();
+    }
+
+    function resetNotifyTypeSelectForCreate() {
+      const notifyTypeEl = document.getElementById('notifyType');
+      notifyTypeEl.disabled = false;
+      const shiftOption = notifyTypeEl.querySelector('option[value="shift"]');
+      if (shiftOption) shiftOption.disabled = false;
+    }
+
+    function configureNotifyTypeSelectForEdit(type) {
+      const notifyTypeEl = document.getElementById('notifyType');
+      const shiftOption = notifyTypeEl.querySelector('option[value="shift"]');
+      notifyTypeEl.disabled = false;
+      if (shiftOption) shiftOption.disabled = false;
+
+      if (type === 'shift') {
+        notifyTypeEl.disabled = true;
+      } else {
+        if (shiftOption) shiftOption.disabled = true;
+      }
+    }
+
+    function handleRepeatModeChange() {
+      const mode = document.getElementById('repeatMode').value;
+      const weekDaysContainer = document.getElementById('weekDaysContainer');
+      const monthMonthsContainer = document.getElementById('monthMonthsContainer');
+
+      if (mode === 'weekly') {
+        weekDaysContainer.classList.remove('hidden');
+      } else {
+        weekDaysContainer.classList.add('hidden');
+      }
+
+      if (mode === 'monthly') {
+        monthMonthsContainer.classList.remove('hidden');
+      } else {
+        monthMonthsContainer.classList.add('hidden');
+      }
+
+      if (mode === 'monthly') {
+        const selected = getSelectedMonths();
+        if (selected.length === 0) {
+          setSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1));
+        }
+      }
+    }
+
+    function getSelectedMonths() {
+      return Array.from(document.querySelectorAll('.month-option:checked')).map((cb) => parseInt(cb.value, 10));
+    }
+
+    function getCurrentFormMonth() {
+      const isLunar = document.getElementById('isLunar').value === '1';
+      if (isLunar) {
+        return parseInt(document.getElementById('lunarMonth').value || '1', 10);
+      }
+      const solarDate = document.getElementById('solarDate').value || '';
+      if (/^\d{4}-\d{2}-\d{2}$/.test(solarDate)) {
+        return parseInt(solarDate.slice(5, 7), 10);
+      }
+      return parseInt(document.getElementById('solarMonth').value || '1', 10);
+    }
+
+    function applyMonthInterval(intervalValue) {
+      const interval = parseInt(intervalValue, 10);
+      if (Number.isNaN(interval) || interval < 1 || interval > 6) return;
+
+      if (interval === 1) {
+        setSelectedMonths(Array.from({ length: 12 }, (_, i) => i + 1));
+        return;
+      }
+
+      const startMonthRaw = getCurrentFormMonth();
+      const startMonth = (Number.isNaN(startMonthRaw) || startMonthRaw < 1 || startMonthRaw > 12) ? 1 : startMonthRaw;
+      const selected = new Set();
+      for (let step = 0; step < 12; step += interval) {
+        const month = ((startMonth - 1 + step) % 12) + 1;
+        selected.add(month);
+      }
+      setSelectedMonths(Array.from(selected));
+    }
+
+    function detectMonthIntervalFromSelection() {
+      const picked = getSelectedMonths().sort((a, b) => a - b);
+      if (picked.length === 12) return '1';
+
+      for (const interval of [2, 3, 6]) {
+        const startMonthRaw = getCurrentFormMonth();
+        const startMonth = (Number.isNaN(startMonthRaw) || startMonthRaw < 1 || startMonthRaw > 12) ? 1 : startMonthRaw;
+        const expected = new Set();
+        for (let step = 0; step < 12; step += interval) {
+          expected.add(((startMonth - 1 + step) % 12) + 1);
+        }
+        if (picked.length === expected.size && picked.every((m) => expected.has(m))) {
+          return String(interval);
+        }
+      }
+      return '1';
+    }
+
+    function reapplyMonthIntervalIfPreset() {
+      const intervalEl = document.getElementById('monthInterval');
+      if (!intervalEl) return;
+      if (['1', '2', '3', '6'].includes(intervalEl.value)) {
+        applyMonthInterval(intervalEl.value);
+      }
+    }
+
+    function setSelectedMonths(months) {
+      const target = new Set((months || []).map((m) => parseInt(m, 10)).filter((m) => m >= 1 && m <= 12));
+      document.querySelectorAll('.month-option').forEach((cb) => {
+        cb.checked = target.has(parseInt(cb.value, 10));
+      });
+      syncAllMonthsOption();
+      const intervalEl = document.getElementById('monthInterval');
+      if (intervalEl) intervalEl.value = detectMonthIntervalFromSelection();
+    }
+
+    function syncAllMonthsOption() {
+      const monthOptions = document.querySelectorAll('.month-option');
+      const checkedCount = Array.from(monthOptions).filter((cb) => cb.checked).length;
+      document.getElementById('allMonthsOption').checked = checkedCount === monthOptions.length;
+    }
+
+    document.getElementById('addNotificationBtn').addEventListener('click', () => {
+      document.getElementById('modalTitle').textContent = '添加新通知';
+      document.getElementById('notificationForm').reset();
+      resetNotifyTypeSelectForCreate();
+      document.getElementById('notificationId').value = '';
+      document.getElementById('testNotifyBtn').classList.add('hidden');
+      document.getElementById('shiftSchedulesContainer').innerHTML = '';
+      shiftScheduleCount = 0;
+      toggleConfigSections('normal');
+      applyNotifyTypeConstraints('normal');
+      handleRepeatModeChange();
+      
+      const now = new Date();
+      initSolarSelectors();
+      setSolarDateFromString(now.toISOString().slice(0, 10));
+      document.getElementById('startTime').value = '';
+      document.getElementById('isLunar').value = '0';
+      document.getElementById('solarBtn').classList.replace('bg-gray-200', 'bg-purple-600');
+      document.getElementById('solarBtn').classList.replace('text-gray-700', 'text-white');
+      document.getElementById('lunarBtn').classList.replace('bg-purple-600', 'bg-gray-200');
+      document.getElementById('lunarBtn').classList.replace('text-white', 'text-gray-700');
+      document.getElementById('solarDateContainer').classList.remove('hidden');
+      document.getElementById('lunarDateContainer').classList.add('hidden');
+      initLunarSelectors();
+      updateDatePreview();
+      document.getElementById('shiftStartDate').value = now.toISOString().slice(0, 10);
+      document.getElementById('cycleDays').value = 1;
+      generateShiftSchedules(1);
+      document.getElementById('notificationModal').classList.remove('hidden');
+    });
+
+    document.getElementById('notifyType').addEventListener('change', (e) => {
+      toggleConfigSections(e.target.value);
+      applyNotifyTypeConstraints(e.target.value);
+      if (e.target.value === 'shift') {
+        generateShiftSchedules(parseInt(document.getElementById('cycleDays').value) || 1);
+      }
+    });
+
+    document.getElementById('cycleDays').addEventListener('change', (e) => {
+      const count = parseInt(e.target.value) || 1;
+      generateShiftSchedules(count);
+    });
+
+    document.getElementById('repeatMode').addEventListener('change', handleRepeatModeChange);
+    document.querySelectorAll('.month-option').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        syncAllMonthsOption();
+        document.getElementById('monthInterval').value = detectMonthIntervalFromSelection();
+      });
+    });
+    document.getElementById('allMonthsOption').addEventListener('change', (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll('.month-option').forEach((cb) => {
+        cb.checked = checked;
+      });
+      syncAllMonthsOption();
+      document.getElementById('monthInterval').value = '1';
+    });
+    document.getElementById('monthInterval').addEventListener('change', (e) => {
+      applyMonthInterval(e.target.value);
+    });
+
+    const lunarMonths = ['正', '二', '三', '四', '五', '六', '七', '八', '九', '十', '冬', '腊'];
+    const lunarDays = ['初一','初二','初三','初四','初五','初六','初七','初八','初九','初十',
+                       '十一','十二','十三','十四','十五','十六','十七','十八','十九','二十',
+                       '廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
+
+    function getDaysInMonth(year, month) {
+      return new Date(year, month, 0).getDate();
+    }
+
+    function syncSolarHiddenDate() {
+      const y = document.getElementById('solarYear').value;
+      const m = (document.getElementById('solarMonth').value || '').padStart(2, '0');
+      const d = (document.getElementById('solarDay').value || '').padStart(2, '0');
+      if (y && m && d) {
+        document.getElementById('solarDate').value = `${y}-${m}-${d}`;
+      }
+    }
+
+    function updateSolarDayOptions() {
+      const year = parseInt(document.getElementById('solarYear').value, 10);
+      const month = parseInt(document.getElementById('solarMonth').value, 10);
+      const solarDay = document.getElementById('solarDay');
+      const currentDay = parseInt(solarDay.value || '1', 10);
+      const days = getDaysInMonth(year, month);
+
+      solarDay.innerHTML = '';
+      for (let d = 1; d <= days; d++) {
+        solarDay.innerHTML += `<option value="${d}">${d}日</option>`;
+      }
+
+      solarDay.value = String(Math.min(currentDay, days));
+      syncSolarHiddenDate();
+    }
+
+    function setSolarDateFromString(dateStr) {
+      if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return;
+      const [y, m, d] = dateStr.split('-').map((v) => parseInt(v, 10));
+      document.getElementById('solarYear').value = String(y);
+      document.getElementById('solarMonth').value = String(m);
+      updateSolarDayOptions();
+      document.getElementById('solarDay').value = String(d);
+      syncSolarHiddenDate();
+    }
+
+    function initSolarSelectors() {
+      const solarYear = document.getElementById('solarYear');
+      const solarMonth = document.getElementById('solarMonth');
+      const now = new Date();
+      const startYear = now.getFullYear() - 120;
+      const endYear = now.getFullYear() + 120;
+
+      solarYear.innerHTML = '';
+      for (let y = startYear; y <= endYear; y++) {
+        solarYear.innerHTML += `<option value="${y}">${y}年</option>`;
+      }
+
+      solarMonth.innerHTML = '';
+      for (let m = 1; m <= 12; m++) {
+        solarMonth.innerHTML += `<option value="${m}">${m}月</option>`;
+      }
+
+      solarYear.value = String(now.getFullYear());
+      solarMonth.value = String(now.getMonth() + 1);
+      updateSolarDayOptions();
+      document.getElementById('solarDay').value = String(now.getDate());
+      syncSolarHiddenDate();
+    }
+
+    function initLunarSelectors() {
+      const lunarYear = document.getElementById('lunarYear');
+      const lunarMonth = document.getElementById('lunarMonth');
+      const lunarDay = document.getElementById('lunarDay');
+      const now = new Date();
+      const startYear = now.getFullYear() - 120;
+      const endYear = now.getFullYear() + 120;
+      
+      lunarYear.innerHTML = '';
+      for (let y = startYear; y <= endYear; y++) {
+        lunarYear.innerHTML += `<option value="${y}">${y}年</option>`;
+      }
+      
+      lunarMonth.innerHTML = '';
+      lunarMonths.forEach((m, i) => {
+        lunarMonth.innerHTML += `<option value="${i + 1}">${m}月</option>`;
+      });
+      
+      lunarDay.innerHTML = '';
+      lunarDays.forEach((d, i) => {
+        lunarDay.innerHTML += `<option value="${i + 1}">${d}</option>`;
+      });
+
+      const baseDate = document.getElementById('solarDate').value || now.toISOString().slice(0, 10);
+      const parts = baseDate.split('-');
+      if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const day = parseInt(parts[2], 10);
+        if (!Number.isNaN(year)) lunarYear.value = String(year);
+        if (!Number.isNaN(month) && month >= 1 && month <= 12) lunarMonth.value = String(month);
+        if (!Number.isNaN(day) && day >= 1) lunarDay.value = String(Math.min(day, 30));
+      }
+    }
+
+    function updateDatePreview() {
+      const isLunar = document.getElementById('isLunar').value === '1';
+      const time = document.getElementById('startTime').value || '00:00';
+      let preview = '';
+      
+      if (isLunar) {
+        const year = document.getElementById('lunarYear').value;
+        const monthIdx = parseInt(document.getElementById('lunarMonth').value) - 1;
+        const day = document.getElementById('lunarDay').value;
+        preview = `农历 ${year}-${lunarMonths[monthIdx]}-${lunarDays[day - 1]} ${time}`;
+      } else {
+        const solarDate = document.getElementById('solarDate').value;
+        if (solarDate) {
+          preview = `阳历 ${solarDate} ${time}`;
+        }
+      }
+      document.getElementById('datePreview').textContent = preview;
+    }
+
+    document.getElementById('solarBtn').addEventListener('click', () => {
+      document.getElementById('isLunar').value = '0';
+      document.getElementById('solarBtn').classList.replace('bg-gray-200', 'bg-purple-600');
+      document.getElementById('solarBtn').classList.replace('text-gray-700', 'text-white');
+      document.getElementById('lunarBtn').classList.replace('bg-purple-600', 'bg-gray-200');
+      document.getElementById('lunarBtn').classList.replace('text-white', 'text-gray-700');
+      document.getElementById('solarDateContainer').classList.remove('hidden');
+      document.getElementById('lunarDateContainer').classList.add('hidden');
+      reapplyMonthIntervalIfPreset();
+      updateDatePreview();
+    });
+
+    document.getElementById('lunarBtn').addEventListener('click', () => {
+      document.getElementById('isLunar').value = '1';
+      document.getElementById('lunarBtn').classList.replace('bg-gray-200', 'bg-purple-600');
+      document.getElementById('lunarBtn').classList.replace('text-gray-700', 'text-white');
+      document.getElementById('solarBtn').classList.replace('bg-purple-600', 'bg-gray-200');
+      document.getElementById('solarBtn').classList.replace('text-white', 'text-gray-700');
+      document.getElementById('solarDateContainer').classList.add('hidden');
+      document.getElementById('lunarDateContainer').classList.remove('hidden');
+      initLunarSelectors();
+      reapplyMonthIntervalIfPreset();
+      updateDatePreview();
+    });
+
+    document.getElementById('solarYear').addEventListener('change', () => { updateSolarDayOptions(); updateDatePreview(); });
+    document.getElementById('solarMonth').addEventListener('change', () => { updateSolarDayOptions(); reapplyMonthIntervalIfPreset(); updateDatePreview(); });
+    document.getElementById('solarDay').addEventListener('change', () => { syncSolarHiddenDate(); updateDatePreview(); });
+    document.getElementById('lunarYear').addEventListener('change', updateDatePreview);
+    document.getElementById('lunarMonth').addEventListener('change', () => { reapplyMonthIntervalIfPreset(); updateDatePreview(); });
+    document.getElementById('lunarDay').addEventListener('change', updateDatePreview);
+    document.getElementById('startTime').addEventListener('change', updateDatePreview);
+
+    document.getElementById('closeModal').addEventListener('click', () => document.getElementById('notificationModal').classList.add('hidden'));
+    document.getElementById('notificationModal').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden'); });
+    document.getElementById('cancelBtn').addEventListener('click', () => document.getElementById('notificationModal').classList.add('hidden'));
+
+
+    function buildNotificationPayloadFromModal() {
+      const notifyType = document.getElementById('notifyType').value;
+      const notification = {
+        name: document.getElementById('name').value.trim(),
+        notify_type: notifyType,
+        content: document.getElementById('content').value.trim(),
+        is_active: 1
+      };
+
+      if (notifyType === 'normal' || notifyType === 'birthday') {
+        const repeatMode = document.getElementById('repeatMode').value;
+        const isLunar = document.getElementById('isLunar').value === '1';
+        const startTime = document.getElementById('startTime').value || '00:00';
+        let fullStartTime = '';
+        if (isLunar) {
+          const year = document.getElementById('lunarYear').value;
+          const month = (document.getElementById('lunarMonth').value || '').padStart(2, '0');
+          const day = (document.getElementById('lunarDay').value || '').padStart(2, '0');
+          fullStartTime = `${year}-${month}-${day} ${startTime}`;
+        } else {
+          const solarDate = document.getElementById('solarDate').value;
+          if (solarDate) fullStartTime = `${solarDate} ${startTime}`;
+        }
+        notification.config = {
+          repeat_mode: notifyType === 'birthday' ? 'yearly' : repeatMode,
+          week_days: repeatMode === 'weekly'
+            ? Array.from(document.querySelectorAll('.week-day:checked')).map((cb) => parseInt(cb.value, 10))
+            : (repeatMode === 'monthly' ? getSelectedMonths() : []),
+          month_day: repeatMode === 'monthly'
+            ? (fullStartTime ? parseInt(fullStartTime.slice(8, 10), 10) : null)
+            : (repeatMode === 'yearly' && fullStartTime
+              ? (parseInt(fullStartTime.slice(5, 7), 10) * 100 + parseInt(fullStartTime.slice(8, 10), 10))
+              : null),
+          month_interval: repeatMode === 'monthly' ? parseInt(document.getElementById('monthInterval').value || '1', 10) : 1,
+          start_time: fullStartTime,
+          is_lunar: isLunar ? 1 : 0,
+          advance_days: parseInt(document.getElementById('advanceDays').value) || 0
+        };
+      } else if (notifyType === 'shift') {
+        const schedules = [];
+        document.querySelectorAll('.shift-schedule-item').forEach((item, idx) => {
+          schedules.push({
+            day_of_cycle: idx + 1,
+            shift_type: item.querySelector('.shift-type').value,
+            start_time: item.querySelector('.shift-start').value,
+            end_time: item.querySelector('.shift-end').value,
+            notify_on_start: item.querySelector('.notify-start').checked ? 1 : 0,
+            notify_on_end: item.querySelector('.notify-end').checked ? 1 : 0
+          });
+        });
+        notification.config = {
+          cycle_days: parseInt(document.getElementById('cycleDays').value) || 1,
+          start_date: document.getElementById('shiftStartDate').value,
+          schedules
+        };
+      } else if (notifyType === 'ping') {
+        notification.config = { target: document.getElementById('pingTarget').value.trim() };
+      } else if (notifyType === 'stock') {
+        notification.config = {
+          target_url: document.getElementById('stockTargetUrl').value.trim(),
+          keyword: document.getElementById('stockKeyword').value.trim()
+        };
+      }
+      return notification;
+    }
+
+    document.getElementById('notificationForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try {
+        const id = document.getElementById('notificationId').value;
+        const notifyType = document.getElementById('notifyType').value;
+
+        const notification = {
+          name: document.getElementById('name').value.trim(),
+          notify_type: notifyType,
+          content: document.getElementById('content').value.trim(),
+          is_active: 1
+        };
+
+        if (notifyType === 'normal' || notifyType === 'birthday') {
+          const repeatMode = document.getElementById('repeatMode').value;
+          const isLunar = document.getElementById('isLunar').value === '1';
+          const startTime = document.getElementById('startTime').value || '00:00';
+
+          let fullStartTime = '';
+          if (isLunar) {
+            const year = document.getElementById('lunarYear').value;
+            const month = (document.getElementById('lunarMonth').value || '').padStart(2, '0');
+            const day = (document.getElementById('lunarDay').value || '').padStart(2, '0');
+            fullStartTime = `${year}-${month}-${day} ${startTime}`;
+          } else {
+            const solarDate = document.getElementById('solarDate').value;
+            if (solarDate) {
+              fullStartTime = `${solarDate} ${startTime}`;
+            }
+          }
+
+          notification.config = {
+            repeat_mode: notifyType === 'birthday' ? 'yearly' : repeatMode,
+            week_days: repeatMode === 'weekly'
+              ? Array.from(document.querySelectorAll('.week-day:checked')).map((cb) => parseInt(cb.value, 10))
+              : (repeatMode === 'monthly' ? getSelectedMonths() : []),
+            month_day: repeatMode === 'monthly'
+              ? (fullStartTime ? parseInt(fullStartTime.slice(8, 10), 10) : null)
+              : (repeatMode === 'yearly' && fullStartTime
+                ? (parseInt(fullStartTime.slice(5, 7), 10) * 100 + parseInt(fullStartTime.slice(8, 10), 10))
+                : null),
+            month_interval: repeatMode === 'monthly' ? parseInt(document.getElementById('monthInterval').value || '1', 10) : 1,
+            start_time: fullStartTime,
+            is_lunar: isLunar ? 1 : 0,
+            advance_days: parseInt(document.getElementById('advanceDays').value) || 0
+          };
+        } else if (notifyType === 'shift') {
+          const schedules = [];
+          document.querySelectorAll('.shift-schedule-item').forEach((item, idx) => {
+            schedules.push({
+              day_of_cycle: idx + 1,
+              shift_type: item.querySelector('.shift-type').value,
+              start_time: item.querySelector('.shift-start').value,
+              end_time: item.querySelector('.shift-end').value,
+              notify_on_start: item.querySelector('.notify-start').checked ? 1 : 0,
+              notify_on_end: item.querySelector('.notify-end').checked ? 1 : 0
+            });
+          });
+
+          notification.config = {
+            cycle_days: parseInt(document.getElementById('cycleDays').value) || 1,
+            start_date: document.getElementById('shiftStartDate').value,
+            schedules: schedules
+          };
+        } else if (notifyType === 'ping') {
+          notification.config = {
+            target: document.getElementById('pingTarget').value.trim()
+          };
+        } else if (notifyType === 'stock') {
+          notification.config = {
+            target_url: document.getElementById('stockTargetUrl').value.trim(),
+            keyword: document.getElementById('stockKeyword').value.trim()
+          };
+        }
+
+        const url = id ? `/api/notifications/${id}` : '/api/notifications';
+        const method = id ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(notification)
+        });
+        
+        if (response.ok) {
+          showToast((id ? '更新' : '添加') + '成功');
+          document.getElementById('notificationModal').classList.add('hidden');
+          loadNotifications();
+        } else {
+          showToast('保存失败', 'error');
+        }
+      } catch (error) {
+        showToast(`保存失败: ${error.message || '未知错误'}`, 'error');
+      }
+    });
+
+    document.getElementById('testNotifyBtn').addEventListener('click', async () => {
+      const id = document.getElementById('notificationId').value;
+      if (!id) {
+        showToast('请先保存通知后再测试', 'error');
+        return;
+      }
+      const btn = document.getElementById('testNotifyBtn');
+      const oldHtml = btn.innerHTML;
+      try {
+        const notification = buildNotificationPayloadFromModal();
+        if (!notification.name) {
+          showToast('请先填写通知名称', 'error');
+          return;
+        }
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>测试中';
+        const response = await fetch(`/api/notifications/${id}/test-notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ notification })
+        });
+        const result = await response.json().catch(() => ({}));
+        showToast(result.message || (result.success ? '当前通知测试推送成功' : '当前通知测试推送失败'), result.success ? 'success' : 'error');
+      } catch (error) {
+        showToast(`测试发送失败: ${error.message || '未知错误'}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+      }
+    });
+
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      const term = e.target.value.toLowerCase();
+      document.querySelectorAll('#notificationsBody tr').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+      });
+    });
+
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    darkModeToggle.addEventListener('click', () => {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    });
+    if (localStorage.getItem('theme') === 'dark') document.documentElement.classList.add('dark');
+
+    function updateBeijingTime() {
+      const now = new Date();
+
+      const fullDisplay = document.getElementById('currentTimeDisplay');
+      if (fullDisplay) {
+        const lunarDayMap = {
+          1: '初一', 2: '初二', 3: '初三', 4: '初四', 5: '初五', 6: '初六', 7: '初七', 8: '初八', 9: '初九', 10: '初十',
+          11: '十一', 12: '十二', 13: '十三', 14: '十四', 15: '十五', 16: '十六', 17: '十七', 18: '十八', 19: '十九', 20: '二十',
+          21: '廿一', 22: '廿二', 23: '廿三', 24: '廿四', 25: '廿五', 26: '廿六', 27: '廿七', 28: '廿八', 29: '廿九', 30: '三十'
+        };
+
+        const lunarParts = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+          timeZone: 'Asia/Shanghai',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }).formatToParts(now);
+        const lunarYear = lunarParts.find((p) => p.type === 'relatedYear')?.value || '';
+        const lunarMonth = lunarParts.find((p) => p.type === 'month')?.value || '';
+        const lunarDayRaw = lunarParts.find((p) => p.type === 'day')?.value || '';
+        const lunarDayNum = parseInt(lunarDayRaw, 10);
+        const lunarDayText = lunarDayMap[lunarDayNum] || lunarDayRaw;
+
+        const timeText = new Intl.DateTimeFormat('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        }).format(now);
+        const dateText = new Intl.DateTimeFormat('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }).format(now);
+        const weekText = new Intl.DateTimeFormat('zh-CN', {
+          timeZone: 'Asia/Shanghai',
+          weekday: 'long'
+        }).format(now);
+        fullDisplay.innerHTML =
+          `<span class="time-segment"><strong>当前时间:</strong> ${dateText} ${timeText}</span>` +
+          `<span class="time-segment"><strong>当前时区:</strong> Asia/Shanghai</span>` +
+          `<span class="time-segment">${weekText}（${lunarYear}年农历${lunarMonth}${lunarDayText}）</span>`;
+      }
+    }
+
+
+    let realtimeSocket = null;
+    let realtimeReconnectTimer = null;
+    let realtimeRetry = 0;
+    let realtimeHeartbeat = null;
+
+    function connectRealtimeStatus() {
+      if (!('WebSocket' in window)) return;
+      if (realtimeSocket && [WebSocket.OPEN, WebSocket.CONNECTING].includes(realtimeSocket.readyState)) return;
+      clearTimeout(realtimeReconnectTimer);
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      realtimeSocket = new WebSocket(`${protocol}//${location.host}/ws`);
+
+      realtimeSocket.onopen = () => {
+        realtimeRetry = 0;
+        clearInterval(realtimeHeartbeat);
+        realtimeHeartbeat = setInterval(() => {
+          if (realtimeSocket && realtimeSocket.readyState === WebSocket.OPEN) realtimeSocket.send('ping');
+        }, 25000);
+      };
+
+      realtimeSocket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (['state_update', 'push_status'].includes(msg.type)) {
+            if (msg.type === 'push_status' && msg.payload && msg.payload.message) {
+              const ok = String(msg.payload.status || '').includes('success');
+              showToast(msg.payload.message, ok ? 'success' : 'error');
+            }
+            clearTimeout(window.__reloadTimer);
+            window.__reloadTimer = setTimeout(loadNotifications, 180);
+          }
+        } catch (e) {}
+      };
+
+      realtimeSocket.onclose = () => {
+        clearInterval(realtimeHeartbeat);
+        const delay = Math.min(30000, 1000 * Math.pow(2, realtimeRetry++));
+        realtimeReconnectTimer = setTimeout(connectRealtimeStatus, delay);
+      };
+      realtimeSocket.onerror = () => {
+        try { realtimeSocket.close(); } catch (e) {}
+      };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        loadNotifications();
+        connectRealtimeStatus();
+      }
+    });
+
+    window.addEventListener('online', () => {
+      loadNotifications();
+      connectRealtimeStatus();
+    });
+    window.addEventListener('load', () => {
+      initSolarSelectors();
+      initLunarSelectors();
+      loadNotifications();
+      connectRealtimeStatus();
+      setInterval(loadNotifications, 60000);
+      updateBeijingTime();
+      setInterval(updateBeijingTime, 1000);
+    });
+  </script>
+</body>
+</html>
