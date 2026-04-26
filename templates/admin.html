@@ -25,6 +25,7 @@
       min-height: 100vh;
       background-attachment: fixed;
       background-color: var(--bg-color);
+      background-image: radial-gradient(circle at top, rgba(99, 102, 241, 0.14), transparent 34%);
       color: var(--text-color);
       transition: background-color 0.3s, color 0.3s;
     }
@@ -69,6 +70,64 @@
     .action-stack button { width:auto; min-width:2.35rem; text-align:center; }
     .config-cell, .next-push-cell, .status-cell { overflow:hidden; }
     .config-cell div, .next-push-cell div { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .notifications-mobile { display: none; }
+    .notification-mobile-card {
+      border: 1px solid rgba(99, 102, 241, 0.12);
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.95));
+      border-radius: 1.25rem;
+      padding: 1rem;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+    }
+    .dark .notification-mobile-card {
+      background: linear-gradient(180deg, rgba(31,41,55,.98), rgba(17,24,39,.95));
+      border-color: rgba(129, 140, 248, 0.18);
+    }
+    .notification-mobile-meta-label {
+      font-size: .72rem;
+      color: var(--text-secondary-color);
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .notification-mobile-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: .5rem;
+    }
+    .notification-mobile-actions button {
+      width: 100%;
+      min-height: 2.5rem;
+      border-radius: .9rem;
+      font-size: .8rem;
+      font-weight: 600;
+    }
+    .notification-modal-panel {
+      width: min(960px, calc(100vw - 1.5rem));
+      max-height: min(92vh, 980px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border-radius: 1.5rem;
+    }
+    .notification-form-shell {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .notification-form-body {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 1.5rem;
+    }
+    .notification-form-footer {
+      position: sticky;
+      bottom: 0;
+      background: var(--card-bg);
+      border-top: 1px solid var(--border-color);
+      padding: 1rem 1.5rem 1.25rem;
+      padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    }
     @media (max-width: 640px) {
       body { -webkit-tap-highlight-color: transparent; }
       main { padding: 1rem !important; }
@@ -79,6 +138,40 @@
       .notification-table { min-width: 980px; }
       .action-stack { align-items:center; }
       input, select, textarea, button { font-size: 16px; }
+      .notifications-desktop { display: none; }
+      .notifications-mobile { display: block; }
+      #notificationModal {
+        padding: 0;
+        align-items: stretch;
+        justify-content: stretch;
+      }
+      .notification-modal-panel {
+        width: 100vw;
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+      }
+      .notification-form-body {
+        padding: .875rem;
+        padding-bottom: .5rem;
+      }
+      .notification-form-footer {
+        padding: .75rem .875rem calc(.875rem + env(safe-area-inset-bottom));
+      }
+      .notification-form-footer .footer-actions {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: .5rem;
+      }
+      .notification-form-footer .footer-actions .footer-primary { grid-column: span 1; }
+      .notification-form-footer button { justify-content: center; }
+      .notification-form-footer button,
+      .notification-form-footer .footer-primary {
+        width: 100%;
+        min-height: 2.75rem;
+      }
+      #notificationModal .bg-gray-50 { padding: .875rem 1rem; }
+      #currentTimeDisplay { display: none; }
     }
   </style>
 <link rel="stylesheet" href="/static/css/app.css">
@@ -111,13 +204,13 @@
     </div>
   </nav>
   
-  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="flex justify-between items-center mb-6">
-      <div class="flex items-center gap-6">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <div class="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-center mb-6">
+      <div class="flex items-center gap-4 sm:gap-6">
         <h2 class="text-lg font-bold text-primary">通知列表</h2>
         <div id="currentTimeDisplay" class="text-sm text-secondary"></div>
       </div>
-      <button id="addNotificationBtn" class="btn-primary text-white px-4 py-2 rounded-md text-sm font-medium flex items-center">
+      <button id="addNotificationBtn" class="btn-primary text-white px-4 py-3 rounded-2xl text-sm font-medium flex items-center justify-center shadow-lg shadow-indigo-500/20 sm:rounded-md sm:py-2">
         <i class="fas fa-plus mr-2"></i>添加通知
       </button>
     </div>
@@ -130,7 +223,7 @@
         class="w-full px-10 py-2 border rounded-md focus:outline-none">
     </div>
 
-    <div class="card rounded-lg overflow-x-auto shadow-md">
+    <div class="notifications-desktop card rounded-lg overflow-x-auto shadow-md">
       <table class="notification-table divide-y divide-gray-200">
         <colgroup>
           <col style="width:33%">
@@ -153,15 +246,17 @@
         <tbody id="notificationsBody" class="divide-y divide-gray-200"></tbody>
       </table>
     </div>
+
+    <div id="mobileNotificationsList" class="notifications-mobile space-y-3"></div>
   </main>
 
   <footer class="text-center text-sm text-secondary mt-8 pb-4">
     V1.0 - 通知推送系统
   </footer>
 
-  <div id="notificationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center z-50">
-    <div class="card rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-screen overflow-y-auto">
-      <div class="bg-gray-50 px-6 py-4 border-b rounded-t-lg">
+  <div id="notificationModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 modal-container hidden flex items-center justify-center z-50 p-2 sm:p-4">
+    <div class="card notification-modal-panel shadow-xl">
+      <div class="bg-gray-50 px-4 py-4 sm:px-6 border-b rounded-t-2xl">
         <div class="flex items-center justify-between">
           <h3 id="modalTitle" class="text-lg font-medium text-primary">添加新通知</h3>
           <button id="closeModal" class="text-gray-400 hover:text-gray-600">
@@ -170,9 +265,9 @@
         </div>
       </div>
       
-      <form id="notificationForm" class="p-6 space-y-6">
+      <form id="notificationForm" class="notification-form-shell">
         <input type="hidden" id="notificationId">
-        
+        <div class="notification-form-body space-y-6">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label for="name" class="block text-sm font-medium mb-1">通知名称 *</label>
@@ -330,17 +425,20 @@
           <label for="content" class="block text-sm font-medium mb-1">提醒内容</label>
           <textarea id="content" rows="3" placeholder="输入提醒内容..." class="w-full px-3 py-2 border rounded-md focus:outline-none"></textarea>
         </div>
-        
-        <div class="flex justify-end space-x-3 pt-4 border-t">
-          <button type="button" id="testNotifyBtn" class="hidden btn-info text-white px-4 py-2 rounded-md text-sm font-medium flex items-center">
+
+        </div>
+        <div class="notification-form-footer">
+          <div class="footer-actions flex flex-wrap justify-end gap-3">
+          <button type="button" id="testNotifyBtn" class="hidden btn-info text-white px-4 py-2 rounded-xl text-sm font-medium flex items-center">
             <i class="fas fa-paper-plane mr-2"></i>测试通知
           </button>
-          <button type="button" id="cancelBtn" class="px-4 py-2 border rounded-md text-sm font-medium hover:bg-gray-50">
+          <button type="button" id="cancelBtn" class="px-4 py-2 border rounded-xl text-sm font-medium hover:bg-gray-50">
             取消
           </button>
-          <button type="submit" class="btn-primary text-white px-4 py-2 rounded-md text-sm font-medium">
+          <button type="submit" class="footer-primary btn-primary text-white px-4 py-2 rounded-xl text-sm font-medium">
             <i class="fas fa-save mr-2"></i>保存
           </button>
+          </div>
         </div>
       </form>
     </div>
@@ -508,18 +606,30 @@
       `;
     }
 
+    function buildNextPushSummary(notification) {
+      if (notification.notify_type === 'ping' || notification.notify_type === 'stock') {
+        return '实时检测';
+      }
+      if (!notification.next_push) {
+        return '暂无计划';
+      }
+      return escapeHtml(String(notification.next_push).trim());
+    }
+
     async function loadNotifications() {
       try {
         const response = await fetch('/api/notifications');
         const data = await response.json();
         const tbody = document.getElementById('notificationsBody');
+        const mobileList = document.getElementById('mobileNotificationsList');
         
         if (!data || data.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" class="text-center py-8 text-secondary">暂无通知</td></tr>';
+          mobileList.innerHTML = '<div class="notification-mobile-card text-center text-secondary py-8">暂无通知</div>';
           return;
         }
 
-        tbody.innerHTML = data.map(n => {
+        const rows = data.map(n => {
           const statusHtml = n.is_active 
             ? '<span class="px-2 py-1 text-xs font-medium rounded-full text-white bg-green-500"><i class="fas fa-check-circle mr-1"></i>正常</span>'
             : '<span class="px-2 py-1 text-xs font-medium rounded-full text-white bg-gray-500"><i class="fas fa-pause-circle mr-1"></i>已停用</span>';
@@ -548,13 +658,15 @@
           const nextPushHtml = (n.notify_type === 'ping' || n.notify_type === 'stock')
             ? '<div class="text-xs text-gray-400"></div>'
             : buildNextPushBadge(n.next_push);
+          const nextPushSummary = buildNextPushSummary(n);
           
           const safeName = escapeHtml(n.name);
           const previewSource = n.content_with_age || n.content || '';
           const contentPreview = previewSource ? escapeHtml(previewSource.substring(0, 30)) + (previewSource.length > 30 ? '...' : '') : '';
+          const searchText = escapeHtml([n.name || '', previewSource || '', typeText || '', nextPushSummary].join(' ').toLowerCase());
           
           return `
-            <tr>
+            <tr data-search-item="notification" data-search="${searchText}">
               <td class="px-3 py-4">
                 <div class="font-medium text-primary notification-name-cell" title="${safeName}">${safeName}</div>
                 ${contentPreview ? '<div class="text-xs text-secondary mt-1 notification-content-preview" title="' + escapeHtml(previewSource) + '">' + contentPreview + '</div>' : ''}
@@ -572,7 +684,36 @@
               </td>
             </tr>
           `;
-        }).join('');
+        });
+
+        const mobileCards = data.map(n => {
+          const safeName = escapeHtml(n.name || '未命名通知');
+          const nextPushSummary = buildNextPushSummary(n);
+          const previewSource = n.content_with_age || n.content || '';
+          const searchText = escapeHtml([n.name || '', previewSource || '', nextPushSummary].join(' ').toLowerCase());
+
+          return `
+            <div class="notification-mobile-card" data-search-item="notification" data-search="${searchText}">
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div class="min-w-0 flex-1">
+                  <div class="text-base font-semibold text-primary truncate" title="${safeName}">${safeName}</div>
+                </div>
+              </div>
+              <div class="mb-4">
+                <div class="notification-mobile-meta-label mb-1">下次推送</div>
+                <div class="text-sm text-primary break-words">${nextPushSummary}</div>
+              </div>
+              <div class="notification-mobile-actions">
+                <button class="edit-btn bg-purple-50 text-purple-600" data-id="${n.id}">编辑</button>
+                <button class="toggle-btn bg-yellow-50 text-yellow-700" data-id="${n.id}" data-active="${n.is_active}">${n.is_active ? '停用' : '启用'}</button>
+                <button class="delete-btn bg-red-50 text-red-600" data-id="${n.id}">删除</button>
+              </div>
+            </div>
+          `;
+        });
+
+        tbody.innerHTML = rows.join('');
+        mobileList.innerHTML = mobileCards.join('');
 
         document.querySelectorAll('.edit-btn').forEach(btn => btn.addEventListener('click', editNotification));
         document.querySelectorAll('.toggle-btn').forEach(btn => btn.addEventListener('click', toggleNotification));
@@ -1361,8 +1502,9 @@
 
     document.getElementById('searchInput').addEventListener('input', (e) => {
       const term = e.target.value.toLowerCase();
-      document.querySelectorAll('#notificationsBody tr').forEach(row => {
-        row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
+      document.querySelectorAll('[data-search-item="notification"]').forEach(item => {
+        const haystack = (item.dataset.search || item.textContent || '').toLowerCase();
+        item.style.display = haystack.includes(term) ? '' : 'none';
       });
     });
 
