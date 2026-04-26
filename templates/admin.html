@@ -616,6 +616,44 @@
       return escapeHtml(String(notification.next_push).trim());
     }
 
+    function buildNextPushMobileMeta(nextPushValue, notifyType) {
+      if (notifyType === 'ping' || notifyType === 'stock') {
+        return '<div class="text-xs font-semibold text-indigo-600">实时检测</div>';
+      }
+      if (!nextPushValue) {
+        return '<div class="text-xs text-gray-400">暂无计划</div>';
+      }
+
+      const raw = String(nextPushValue).trim();
+      const match = raw.match(/(\d{4})-(\d{2})-(\d{2})(?:\s+(\d{2}):(\d{2}))?/);
+      const target = match
+        ? new Date(
+            Number(match[1]),
+            Number(match[2]) - 1,
+            Number(match[3]),
+            Number(match[4] || '0'),
+            Number(match[5] || '0'),
+            0,
+            0
+          )
+        : new Date(Number.NaN);
+
+      if (Number.isNaN(target.getTime())) {
+        return `<div class="text-sm text-primary break-words">${escapeHtml(raw)}</div>`;
+      }
+
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const targetStart = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+      const dayDiff = Math.floor((targetStart.getTime() - todayStart.getTime()) / 86400000);
+      const dayText = dayDiff <= 0 ? '今天' : `还有${dayDiff}天`;
+
+      return `
+        <div class="text-xs font-semibold text-indigo-600 mb-1">${dayText}</div>
+        <div class="text-sm text-primary break-words">${escapeHtml(raw)}</div>
+      `;
+    }
+
     async function loadNotifications() {
       try {
         const response = await fetch('/api/notifications');
@@ -689,6 +727,7 @@
         const mobileCards = data.map(n => {
           const safeName = escapeHtml(n.name || '未命名通知');
           const nextPushSummary = buildNextPushSummary(n);
+          const nextPushMobileMeta = buildNextPushMobileMeta(n.next_push, n.notify_type);
           const previewSource = n.content_with_age || n.content || '';
           const searchText = escapeHtml([n.name || '', previewSource || '', nextPushSummary].join(' ').toLowerCase());
 
@@ -701,7 +740,7 @@
               </div>
               <div class="mb-4">
                 <div class="notification-mobile-meta-label mb-1">下次推送</div>
-                <div class="text-sm text-primary break-words">${nextPushSummary}</div>
+                ${nextPushMobileMeta}
               </div>
               <div class="notification-mobile-actions">
                 <button class="edit-btn bg-purple-50 text-purple-600" data-id="${n.id}">编辑</button>
