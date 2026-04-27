@@ -119,10 +119,39 @@
       .modal-content { width: 100%; margin: 0; border-radius: 1.25rem 1.25rem 0 0; max-height: 92vh; overflow-y: auto; }
     }
     .push-log-row { border-bottom: 1px solid var(--border-color); }
-  .push-log-name, .push-log-msg { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .realtime-dot { width: 8px; height: 8px; border-radius: 9999px; display:inline-block; background:#9ca3af; margin-right:6px; }
-  .realtime-dot.connected { background:#10b981; }
-  @media (max-width: 640px) { .push-log-grid { grid-template-columns: 1fr !important; gap:.25rem; } }
+    .push-log-name, .push-log-msg { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .realtime-dot { width: 8px; height: 8px; border-radius: 9999px; display:inline-block; background:#9ca3af; margin-right:6px; }
+    .realtime-dot.connected { background:#10b981; }
+    .push-log-time { min-width: 0; }
+    @media (max-width: 640px) {
+      .push-log-row {
+        border-bottom: 0;
+        padding: .75rem;
+      }
+      .push-log-grid {
+        grid-template-columns: 1fr !important;
+        gap: .35rem !important;
+        padding: .85rem .95rem;
+        border: 1px solid var(--border-color);
+        border-radius: 1rem;
+        background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.95));
+      }
+      .dark .push-log-grid {
+        background: linear-gradient(180deg, rgba(31,41,55,.98), rgba(17,24,39,.95));
+      }
+      .push-log-name {
+        font-size: .95rem;
+      }
+      .push-log-time {
+        font-size: .8rem;
+      }
+      #recentLogs {
+        padding: .25rem 0 .5rem;
+      }
+      #recentLogs > .push-log-row:last-child {
+        padding-bottom: 0;
+      }
+    }
 </style>
 <link rel="stylesheet" href="/static/css/app.css">
 </head>
@@ -790,14 +819,13 @@
           return;
         }
         box.innerHTML = logs.map((log) => {
-          const status = log.status === 'success' ? '成功' : log.status === 'retrying' ? '重试中' : '失败';
+          const status = log.status === 'success' ? '推送完成' : log.status === 'retrying' ? '重试中' : '推送失败';
           const statusClass = log.status === 'success' ? 'text-green-600' : log.status === 'retrying' ? 'text-yellow-600' : 'text-red-600';
           return `<div class="px-6 py-3 push-log-row">
-            <div class="push-log-grid grid items-center text-sm" style="grid-template-columns: 22% 12% 18% 48%;">
-              <div class="push-log-name text-primary font-medium" title="${escapeHtml(log.notification_name || '')}">${escapeHtml(log.notification_name || '未命名')}</div>
-              <div class="${statusClass} font-medium">${status}</div>
-              <div class="text-secondary">${escapeHtml(log.pushed_at || '')}</div>
-              <div class="push-log-msg text-secondary" title="${escapeHtml(log.message || '')}">${escapeHtml(log.message || '')}</div>
+            <div class="push-log-grid grid items-center text-sm gap-3" style="grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto;">
+              <div class="push-log-name text-primary font-medium truncate" title="${escapeHtml(log.notification_name || '')}">${escapeHtml(log.notification_name || '未命名')}</div>
+              <div class="push-log-time text-secondary truncate" title="${escapeHtml(log.pushed_at || '')}">${escapeHtml(log.pushed_at || '')}</div>
+              <div class="${statusClass} font-medium whitespace-nowrap">${status}</div>
             </div>
           </div>`;
         }).join('');
