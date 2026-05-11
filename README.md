@@ -98,8 +98,8 @@ docker run -d \
 ## 安装方式三：源码运行
 
 ```bash
-git clone https://github.com/auto8624/worker1.git
-cd worker1
+git clone https://github.com/auto8624/worker.git
+cd worker
 pip install -r requirements.txt
 python run.py
 ```
