@@ -200,7 +200,7 @@ def normalize_notification_record(raw, fallback_id=None):
             'month_day': month_day,
             'month_interval': month_interval,
             'start_time': str(start_time or ''),
-            'is_lunar': 1 if str(config.get('is_lunar', 0)).lower() in ('1', 'true') else 0,
+            'is_lunar': 1 if str(config.get('is_lunar', 0)) in ('1', 'true', 'True') else 0,
             'advance_days': _safe_int(config.get('advance_days'), 0),
         }
     elif notify_type == 'shift':
