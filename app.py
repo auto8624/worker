@@ -142,6 +142,66 @@ def normalize_ping_target(target):
     return (target or '').strip().rstrip('/')
 
 
+def convert_lunar_to_solar_date(lunar_year, lunar_month, lunar_day):
+    """将农历日期转换为阳历日期
+    
+    Args:
+        lunar_year: 农历年份
+        lunar_month: 农历月份（暂不支持闰月，按普通月处理）
+        lunar_day: 农历日期
+    
+    Returns:
+        tuple: (solar_year, solar_month, solar_day) 或 None（转换失败）
+    """
+    try:
+        from lunarcalendar import Lunar
+        lunar_year = int(lunar_year)
+        lunar_month = int(lunar_month)
+        lunar_day = int(lunar_day)
+        
+        # 使用 lunarcalendar 库进行转换
+        lunar = Lunar(lunar_year, lunar_month, lunar_day)
+        solar_date = lunar.to_date()
+        return (solar_date.year, solar_date.month, solar_date.day)
+    except Exception:
+        return None
+
+
+def parse_lunar_start_datetime(start_time, is_lunar=False):
+    """解析开始时间，支持农历转换
+    
+    Args:
+        start_time: 日期时间字符串，格式 'YYYY-MM-DD HH:MM'
+        is_lunar: 是否为农历日期
+    
+    Returns:
+        datetime: 转换后的阳历 datetime 对象，或 None
+    """
+    if not start_time or len(start_time) < 16:
+        return None
+    
+    try:
+        year = int(start_time[0:4])
+        month = int(start_time[5:7])
+        day = int(start_time[8:10])
+        hour = int(start_time[11:13])
+        minute = int(start_time[14:16])
+        
+        if is_lunar:
+            # 农历转阳历
+            result = convert_lunar_to_solar_date(year, month, day)
+            if not result:
+                return None
+            solar_year, solar_month, solar_day = result
+            return datetime(solar_year, solar_month, solar_day, hour, minute)
+        else:
+            # 直接按阳历解析
+            return datetime(year, month, day, hour, minute)
+    except Exception:
+        return None
+
+
+
 def is_safe_outbound_url(raw_url):
     value = sanitize_push_url(raw_url)
     if not value:
@@ -462,6 +522,53 @@ def next_monthly_push_datetime(start_time, interval_months, now, advance_days=0)
     return None
 
 
+def next_lunar_monthly_push_datetime(start_time, interval_months, now, advance_days=0):
+    """计算农历每月推送的下一次阳历时间
+    
+    农历按月推送需要按农历月份间隔推算，然后转换为阳历日期。
+    """
+    if not start_time or len(start_time) < 16:
+        return None
+    
+    try:
+        lunar_year = int(start_time[0:4])
+        lunar_month = int(start_time[5:7])
+        lunar_day = int(start_time[8:10])
+        hour = int(start_time[11:13])
+        minute = int(start_time[14:16])
+    except Exception:
+        return None
+    
+    interval_months = max(1, int(interval_months or 1))
+    advance_days = max(0, int(advance_days or 0))
+    
+    # 从当前农历月份开始，按间隔向后推
+    current_lunar_year = lunar_year
+    current_lunar_month = lunar_month
+    guard = 0
+    while guard < 240:
+        # 转换当前农历日期为阳历
+        result = convert_lunar_to_solar_date(current_lunar_year, current_lunar_month, lunar_day)
+        if result:
+            solar_year, solar_month, solar_day = result
+            candidate = datetime(solar_year, solar_month, solar_day, hour, minute)
+            reminder_dt = candidate - timedelta(days=advance_days)
+            if reminder_dt > now:
+                return reminder_dt
+        
+        # 农历月份 + interval_months
+        current_lunar_month += interval_months
+        # 处理农历年进位
+        while current_lunar_month > 12:
+            current_lunar_month -= 12
+            current_lunar_year += 1
+        
+        guard += 1
+    
+    return None
+
+
+
 def normalize_notification_payload(payload, existing=None):
     notify_type = payload.get('notify_type', (existing or {}).get('notify_type', 'normal'))
     config_data = payload.get('config', {}) or {}
@@ -720,6 +827,7 @@ def calculate_next_push(notification, config, now):
         start_time = config.get('start_time', '')
         if not start_time:
             return None
+        is_lunar = config.get('is_lunar', 0) == 1 or config.get('is_lunar', 0) == '1'
         notify_time = start_time[11:16] if len(start_time) >= 16 else start_time[:5]
         repeat_mode = config.get('repeat_mode', 'once')
         advance_days = int(config.get('advance_days', 0) or 0)
@@ -727,7 +835,38 @@ def calculate_next_push(notification, config, now):
             notify_time_obj = datetime.strptime(notify_time[:5], '%H:%M').time()
         except Exception:
             notify_time_obj = None
-        def candidate_after(event_date):
+        
+        # 农历转阳历获取阳历日期
+        def get_solar_date_from_lunar(base_date):
+            """如果是农历，将 base_date 的年份与 start_time 中的农历月日组合，转换为阳历"""
+            if not is_lunar:
+                return base_date
+            try:
+                lunar_month = int(start_time[5:7])
+                lunar_day = int(start_time[8:10])
+                lunar_year = int(start_time[0:4])
+                
+                # 对于 once/yearly 模式，使用 start_time 中指定的年份
+                if repeat_mode in ('once', 'yearly'):
+                    result = convert_lunar_to_solar_date(lunar_year, lunar_month, lunar_day)
+                else:
+                    # 对于 monthly 模式，使用 base_date 的年份
+                    result = convert_lunar_to_solar_date(base_date.year, lunar_month, lunar_day)
+                
+                if result:
+                    solar_year, solar_month, solar_day = result
+                    return datetime(solar_year, solar_month, solar_day).date()
+            except Exception:
+                pass
+            return base_date
+        
+        def candidate_after(event_date, force_solar_date=None):
+            # 如果提供了 force_solar_date，直接使用（用于 once 模式已经转换好的日期）
+            if force_solar_date:
+                event_date = force_solar_date
+            elif is_lunar:
+                event_date = get_solar_date_from_lunar(event_date)
+            
             start_date = current_date
             if notify_time_obj and datetime.combine(current_date, notify_time_obj) <= now:
                 start_date = current_date + timedelta(days=1)
@@ -739,7 +878,15 @@ def calculate_next_push(notification, config, now):
             return None
         try:
             if repeat_mode == 'once':
-                return candidate_after(datetime.strptime(start_time[:10], '%Y-%m-%d').date())
+                if is_lunar:
+                    # 农历一次性事件：使用 start_time 中的年份作为农历年份，转换为阳历
+                    event_dt = parse_lunar_start_datetime(start_time, is_lunar=True)
+                    if event_dt:
+                        # 直接传入转换后的阳历日期，避免再次转换
+                        return candidate_after(None, force_solar_date=event_dt.date())
+                    return None
+                else:
+                    return candidate_after(datetime.strptime(start_time[:10], '%Y-%m-%d').date())
             if repeat_mode == 'daily':
                 d = current_date if not notify_time_obj or datetime.combine(current_date, notify_time_obj) > now else current_date + timedelta(days=1)
                 return f"{d.strftime('%Y-%m-%d')} {notify_time}"
@@ -747,26 +894,46 @@ def calculate_next_push(notification, config, now):
                 days = set(normalize_week_days_values(config.get('week_days'))) or set(range(7))
                 for i in range(0, 14):
                     d = current_date + timedelta(days=i)
-                    # Project convention: Monday=0 ... Sunday=6, matching Python weekday().
                     if d.weekday() in days:
                         hit = candidate_after(d)
                         if hit:
                             return hit
             if repeat_mode == 'monthly':
-                next_dt = next_monthly_push_datetime(start_time, get_month_interval(config), now, advance_days)
-                return next_dt.strftime('%Y-%m-%d %H:%M') if next_dt else None
+                if is_lunar:
+                    next_dt = next_lunar_monthly_push_datetime(start_time, get_month_interval(config), now, advance_days)
+                    return next_dt.strftime('%Y-%m-%d %H:%M') if next_dt else None
+                else:
+                    next_dt = next_monthly_push_datetime(start_time, get_month_interval(config), now, advance_days)
+                    return next_dt.strftime('%Y-%m-%d %H:%M') if next_dt else None
             if repeat_mode == 'yearly':
-                md = int(config.get('month_day') or 0)
-                if not md and len(start_time) >= 10:
-                    md = int(start_time[5:7]) * 100 + int(start_time[8:10])
-                target_month = md // 100
-                target_day = md % 100
-                for i in range(0, 370):
-                    d = current_date + timedelta(days=i)
-                    if d.month == target_month and d.day == target_day:
-                        hit = candidate_after(d)
-                        if hit:
-                            return hit
+                if is_lunar:
+                    lunar_month = int(start_time[5:7])
+                    lunar_day = int(start_time[8:10])
+                    lunar_year = int(start_time[0:4])
+                    for year_offset in range(0, 10):
+                        test_year = lunar_year + year_offset
+                        # 确保至少从当前年开始
+                        if test_year < current_date.year:
+                            test_year = current_date.year
+                        result = convert_lunar_to_solar_date(test_year, lunar_month, lunar_day)
+                        if result:
+                            solar_year, solar_month, solar_day = result
+                            event_date = datetime(solar_year, solar_month, solar_day).date()
+                            hit = candidate_after(None, force_solar_date=event_date)
+                            if hit:
+                                return hit
+                else:
+                    md = int(config.get('month_day') or 0)
+                    if not md and len(start_time) >= 10:
+                        md = int(start_time[5:7]) * 100 + int(start_time[8:10])
+                    target_month = md // 100
+                    target_day = md % 100
+                    for i in range(0, 370):
+                        d = current_date + timedelta(days=i)
+                        if d.month == target_month and d.day == target_day:
+                            hit = candidate_after(d)
+                            if hit:
+                                return hit
         except Exception:
             return None
     if notify_type == 'shift':
