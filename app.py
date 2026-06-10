@@ -910,10 +910,9 @@ def calculate_next_push(notification, config, now):
                     lunar_month = int(start_time[5:7])
                     lunar_day = int(start_time[8:10])
                     lunar_year = int(start_time[0:4])
-                    for year_offset in range(0, 10):
-                        test_year = lunar_year + year_offset
-                        if test_year < current_date.year:
-                            test_year = current_date.year
+                    for i in range(0, 20):
+                        # 从当前年开始逐年递增
+                        test_year = current_date.year + i
                         result = convert_lunar_to_solar_date(test_year, lunar_month, lunar_day)
                         if result:
                             solar_year, solar_month, solar_day = result
@@ -921,7 +920,6 @@ def calculate_next_push(notification, config, now):
                             hit = candidate_after(None, force_solar_date=event_date)
                             if hit:
                                 return hit
-                    # 农历循环未找到结果
                     return None
                 else:
                     md = int(config.get('month_day') or 0)
